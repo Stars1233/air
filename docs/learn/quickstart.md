@@ -41,7 +41,10 @@ app = air.Air()
 
 @app.get("/")
 async def index():
-    return air.layouts.mvpcss(air.H1("Hello, Air!"), air.P("Breathe it in."))
+    return air.layouts.mvpcss(
+        air.H1("Hello, Air!"),
+        air.P("Breathe it in."),
+    )
 ```
 
 Serve your app with:
@@ -83,7 +86,10 @@ app = air.Air()
 
 @app.get("/")
 def index():
-    return air.layouts.mvpcss(air.H1("Hello, Air!"), air.P("Breathe it in."))
+    return air.layouts.mvpcss(
+        air.H1("Hello, Air!"),
+        air.P("Breathe it in."),
+    )
 
 
 @app.get("/air-is-grounded")
@@ -119,7 +125,10 @@ app = air.Air()
 
 @app.page  # Renders as '/'
 def index():  # (1)!
-    return air.layouts.mvpcss(air.H1("Hello, Air!"), air.P("Breathe it in."))
+    return air.layouts.mvpcss(
+        air.H1("Hello, Air!"),
+        air.P("Breathe it in."),
+    )
 
 
 @app.page  # Renders as '/air-is-grounded'
@@ -151,7 +160,10 @@ app = air.Air()
 
 @app.get("/users/{username}")  # (1)!
 def user_detail(username: str):  # (2)!
-    return air.layouts.mvpcss(air.Title(username), air.H1(username))
+    return air.layouts.mvpcss(
+        air.Title(username),
+        air.H1(username),
+    )
 ```
 
 1. We've specified a variable called `username`.
@@ -173,7 +185,10 @@ app = air.Air()
 
 @app.get("/users")
 def user_detail(username: str):  # (1)!
-    return air.layouts.mvpcss(air.Title(username), air.H1(username))
+    return air.layouts.mvpcss(
+        air.Title(username),
+        air.H1(username),
+    )
 ```
 
 1. We have defined a function argument named `username`. Because `username` is not part of the decorator's URL path ('/users'), Air automatically treats it as a query parameter.
@@ -451,11 +466,16 @@ app = air.Air()
 
 @app.get("/avatar")
 def avatar(request: air.Request):
+    fragment = air.Div(
+        air.P("We are fans of the Last Avatar"),
+        class_="thing"
+    ),  # (1)!
+
     return app.jinja(
         request,
         "avatar.html",
         title="Hello, Air Benders",
-        fragment=air.Div(air.P("We are fans of the Last Avatar"), class_="thing"),  # (1)!
+        fragment=fragment,
     )
 ```
 

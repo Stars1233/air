@@ -139,7 +139,9 @@ app = air.Air()
 
 @app.get("/")
 async def index():
-    return air.Html(air.H1("Hello, world!", style="color: blue;"))
+    return air.Html(
+        air.H1("Hello, world!", style="color: blue;"),
+    )
 ```
 
 !!! note
@@ -162,10 +164,14 @@ api = FastAPI()
 @app.get("/")
 def landing_page():
     return air.Html(
-        air.Head(air.Title("Awesome SaaS")),
+        air.Head(
+            air.Title("Awesome SaaS"),
+        ),
         air.Body(
             air.H1("Awesome SaaS"),
-            air.P(air.A("API Docs", target="_blank", href="/api/docs")),
+            air.P(
+                air.A("API Docs", target="_blank", href="/api/docs"),
+            ),
         ),
     )
 

@@ -21,7 +21,9 @@ async def index(request: air.Request):
         action = air.Tags(
             air.H1(request.session["username"]),
             air.P(request.session.get("logged_in_at")),
-            air.P(air.A("Logout", href="/logout")),
+            air.P(
+                air.A("Logout", href="/logout"),
+            ),
         )
     else:
         # login the user
@@ -111,7 +113,9 @@ def require_login(request: air.Request):
 async def dashboard(request: air.Request, user=Depends(require_login)):
     return air.layouts.mvpcss(
         air.H1(f"Dashboard for {request.session['user']['username']}"),
-        air.P(air.A("Logout", href="/logout")),
+        air.P(
+            air.A("Logout", href="/logout")
+        ),
     )
 ```
 
@@ -143,7 +147,12 @@ def require_login(request: air.Request):
 # --- Routes ---
 @app.page
 async def index(request: air.Request):
-    return air.layouts.mvpcss(air.H1("Landing page"), air.P(air.A("Dashboard", href="/dashboard")))
+    return air.layouts.mvpcss(
+        air.H1("Landing page"),
+        air.P(
+            air.A("Dashboard", href="/dashboard"),
+        ),
+    )
 
 
 @app.page
@@ -179,7 +188,9 @@ async def login():
 async def dashboard(request: air.Request, user=Depends(require_login)):
     return air.layouts.mvpcss(
         air.H1(f"Dashboard for {request.session['user']['username']}"),
-        air.P(air.A("Logout", href="/logout")),
+        air.P(
+            air.A("Logout", href="/logout"),
+        ),
     )
 
 

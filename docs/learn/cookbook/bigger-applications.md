@@ -18,7 +18,12 @@ app = air.Air()
 
 @app.page
 def index():
-    return air.layouts.mvpcss(air.H1("Avatar Data"), air.P(air.A("Dashboard", href="/dashboard")))
+    return air.layouts.mvpcss(
+        air.H1("Avatar Data"),
+        air.P(
+            air.A("Dashboard", href="/dashboard"),
+        ),
+    )
 ```
 
 Now for the dashboard, instead of using the typical `air.Air` tool to instantiate our application, we use `air.AirRouter` like so:
@@ -31,7 +36,12 @@ router = air.AirRouter()
 
 @router.page
 def dashboard():
-    return air.layouts.mvpcss(air.H1("Avatar Data Dashboard"), air.P(air.A("<- Home", href="/")))
+    return air.layouts.mvpcss(
+        air.H1("Avatar Data Dashboard"),
+        air.P(
+            air.A("<- Home", href="/"),
+        ),
+    )
 ```
 
 Now if we go back to our `main.py` we can use the `app.include_router()` method to include the dashboard in our app:
@@ -47,7 +57,10 @@ app.include_router(router)
 @app.page
 def index():
     return air.layouts.mvpcss(
-        air.H1("Avatar Data"), air.P(air.A("Dashboard", href="/dashboard"))
+        air.H1("Avatar Data"),
+        air.P(
+            air.A("Dashboard", href="/dashboard"),
+        ),
     )
 ```
 
@@ -73,7 +86,12 @@ app = air.Air(title="Air")
 
 @app.page
 def index():
-    return air.layouts.mvpcss(air.H1("Air landing page"), air.P(air.A("Shop", href="/shop")))
+    return air.layouts.mvpcss(
+        air.H1("Air landing page"),
+        air.P(
+            air.A("Shop", href="/shop"),
+        ),
+    )
 
 
 # Creating a separate app for the shop,
@@ -83,7 +101,9 @@ shop = air.Air(title="Air shop")
 
 @shop.page
 def index():
-    return air.layouts.mvpcss(air.H1("Shop for Air things"))
+    return air.layouts.mvpcss(
+        air.H1("Shop for Air things"),
+    )
 
 
 # Mount the shop app to the main app
@@ -107,10 +127,14 @@ app = air.Air()
 @app.get("/")
 def landing_page():
     return air.Html(
-        air.Head(air.Title("Awesome SaaS")),
+        air.Head(
+            air.Title("Awesome SaaS"),
+        ),
         air.Body(
             air.H1("Awesome SaaS"),
-            air.P(air.A("API Docs", target="_blank", href="/api/docs")),
+            air.P(
+                air.A("API Docs", target="_blank", href="/api/docs"),
+            ),
         ),
     )
 

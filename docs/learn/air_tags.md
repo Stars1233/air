@@ -275,7 +275,11 @@ Subclasses are not the only way to create custom Air Tags. You can also use func
 
 ```python
 def card(*content, header: str, footer: str):
-    return air.Article(air.Header(header), *content, air.Footer(footer))
+    return air.Article(
+        air.Header(header),
+        *content,
+        air.Footer(footer),
+    )
 ```
 
 We can use this function to create a card:

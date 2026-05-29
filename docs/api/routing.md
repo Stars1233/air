@@ -45,7 +45,10 @@ app.include_router(cart_router)
 
 @app.page
 def index():
-    return air.Div(air.H1("Home page"), air.A("View cart", href=cart.url()))
+    return air.Div(
+        air.H1("Home page"),
+        air.A("View cart", href=cart.url()),
+    )
 ```
 
 ## Query Parameters

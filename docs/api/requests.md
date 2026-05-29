@@ -73,7 +73,9 @@ app = air.Air()
 async def login(request: Request):
     form = await request.form()
     return air.layouts.mvpcss(
-        air.Section(air.Aside({"username": form.get("username")}))
+        air.Section(
+            air.Aside({"username": form.get("username")}),
+        ),
     )
 ```
 
