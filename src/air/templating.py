@@ -50,8 +50,15 @@ class JinjaRenderer:
 
     Example:
 
+        import air
+
+        from air.requests import Request
+
+
+        app = air.Air()
+
         # Instantiate the render callable
-        jinja = JinjaRenderer('templates')
+        jinja = air.JinjaRenderer('templates')
 
         # Use for returning Jinja from views
         @app.get('/')
@@ -73,7 +80,9 @@ class JinjaRenderer:
             return jinja(
                 request,
                 'home.html',
-                content=air.Article(air.P('Cheddar'))
+                content=air.Article(
+                    air.P('Cheddar'),
+                )
             )
 
     """
