@@ -169,6 +169,20 @@ renders as
 </script>
 ```
 
+### Passing reserved words as kwargs
+
+Alternately, we can pass reserved keywords as kwargs.
+
+```python
+air.Label("Email", **{"class": "plain", "for": "email"})
+```
+
+Renders as:
+
+```html
+<label class="plain" for="email">Email</label>
+```
+
 ### Attributes starting with special characters
 
 To get around that in Python we can't begin function arguments with special characters, we lean into how **Air Tags** is kwargs friendly.
