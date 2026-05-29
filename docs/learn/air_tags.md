@@ -365,5 +365,12 @@ air.BaseTag.from_html_to_source("""
 This generates:
 
 ```python
-air.Html(air.Body(air.Main(air.H1("Hello, World", class_="header"))))
+air.Html(
+    air.Head(),
+    air.Body(
+        air.Main(
+            air.H1('Hello, World', class_='header'),
+        ),
+    ),
+)
 ```
