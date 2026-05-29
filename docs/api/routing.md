@@ -1,24 +1,23 @@
-Routing
+## Routing
 
-If you need to knit several Python modules with their own Air views into one, that's where Routing is used. They allow the near seamless combination of multiple Air apps into one. Larger sites are often built from multiple routers.
+If you need to knit several Python modules with their own Air views into one, you will need to use Routing. This allow the near seamless combination of multiple Air apps into one. Larger sites are often built from multiple routers.
 
-Let's imagine we have an e-commerce store with a shopping cart app. Use instantiate a `router` object using `air.AirRouter()` just as we would with `air.App()`:
+For this example, let's imagine we have an e-commerce store with a shopping cart app with a `cart.py` and `main.py` file.
 
-```python
-# cart.py
+```python title="cart.py"
 import air
 
 router = air.AirRouter()
 
 
 @router.page
-def cart():
+def cart_page():
     return air.H1("I am a shopping cart")
 ```
 
-Then in our main page we can load that and tie it into our main `app`.
+Then in our main page we can load that and tie it into our `main.py` app.
 
-```python
+```python title="cart.py"
 import air
 from cart import router as cart_router
 
@@ -31,13 +30,13 @@ def index():
     return air.H1("Home page")
 ```
 
-Note that the router allows sharing of sessions and other application states.
+`AirRouter` allows the sharing of sessions and other application states between routes.
 
-In addition, we can add links through the `.url()` method available on route functions, which generates URLs programmatically:
+In addition, we can add links through the `.url()` method available on route functions:
 
-```python
+```python title="main.py"
 import air
-from cart import router as cart_router, cart
+from cart import router as cart_router, cart_page
 
 app = air.Air()
 app.include_router(cart_router)
@@ -47,7 +46,7 @@ app.include_router(cart_router)
 def index():
     return air.Div(
         air.H1("Home page"),
-        air.A("View cart", href=cart.url()),
+        air.A("View cart", href=cart_page.url()),
     )
 ```
 
