@@ -113,11 +113,11 @@ Third-party context providers: [Code Wiki by Google](https://codewiki.google/git
 
 ## Two Ways to Build
 
-Air gives you two paths to HTML. Start with whichever fits your workflow.
+Air gives you two paths to rendering HTML. Start with whichever fits your workflow.
 
-### Start with HTML
+### 1. Start with HTML
 
-Have your AI generate an HTML mockup, or write one yourself. Drop it in a template, wire it up with minimal Python:
+Have your AI generate an HTML mockup, or write one yourself. Drop it in a template, then wire it up with minimal Python:
 
 `templates/index.html`:
 
@@ -149,7 +149,7 @@ def index(request: air.Request):
 
 ### Start with Python
 
-Write HTML as typed Python classes. Your editor autocompletes attributes, your type checker validates nesting:
+Write HTML as typed Python classes. Your editor can autocomplete attributes and your type checker validates nesting:
 
 `main.py`:
 
@@ -161,16 +161,20 @@ app = air.Air()
 
 @app.page
 def index():
-    return air.Html(air.H1("Hello, world!"))
+    return air.Html(
+        air.H1("Hello, world!"),
+    )
 ```
 
-### Run either one
+## Running Air's Development Server
+
+Choosing either of the above approach, both paths produces the same thing: a working web page.
+
+To see the result, run the following command and open <http://127.0.0.1:8000> in your browser.
 
 ```sh
 air run
 ```
-
-Open <http://127.0.0.1:8000> to see the result. Both paths produce the same thing: a working web page.
 
 ## Use FastAPI Alongside Air
 
