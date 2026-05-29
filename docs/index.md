@@ -129,6 +129,8 @@ uv add "fastapi[standard]"
 
 ## A Simple Example
 
+### main.py
+
 Create a `main.py` with:
 
 ```python
@@ -147,6 +149,16 @@ async def index():
 !!! note
 
     This example uses [Air Tags](api/tags/index.md), which are Python classes that render as HTML. Air Tags are typed and documented, designed to work well with any code completion tool.
+
+### Running Air
+
+To run the development server, run the following command in your terminal:
+
+```sh
+air run
+```
+
+Open <http://127.0.0.1:8000> to see the above example running.
 
 ## Combining FastAPI and Air
 
