@@ -157,9 +157,8 @@ def test_pretty_render_passes_flags_to_formatter(monkeypatch: pytest.MonkeyPatch
 
 
 def test_compact_format_html_minifies() -> None:
-    assert len(SMALL_AIR_TAG_SAMPLE.compact_render()) == 760
-    assert len(AIR_TAG_SAMPLE.compact_render()) == 7536
-    assert len(air.Html(*([AIR_TAG_SAMPLE.children] * 100)).compact_render()) == 884015
+    assert len(SMALL_AIR_TAG_SAMPLE.compact_render()) < len(SMALL_AIR_TAG_SAMPLE.render())
+    assert len(AIR_TAG_SAMPLE.compact_render()) < len(AIR_TAG_SAMPLE.render())
 
 
 def test_compact_render_passes_html_to_compact_formatter(monkeypatch: pytest.MonkeyPatch) -> None:

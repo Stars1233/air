@@ -1,7 +1,7 @@
 """Zero-config CSRF protection for AirForm.
 
-Tokens are HMAC-signed with a per-process secret that's auto-generated
-on import. No configuration needed for single-worker deployments. For
+Tokens are HMAC-signed with a per-process secret that's generated on
+first use. No configuration needed for single-worker deployments. For
 multi-worker production, set the AIRFORM_SECRET environment variable
 so all workers share the same secret.
 
@@ -23,9 +23,9 @@ if TYPE_CHECKING:
     from pydantic import GetCoreSchemaHandler
     from pydantic_core import CoreSchema
 
-#: Secret key for signing CSRF tokens. Auto-generated per process,
-#: or read from AIRFORM_SECRET env var for multi-worker deployments.
-_SECRET: bytes = os.environ.get("AIRFORM_SECRET", "").encode() or secrets.token_bytes(32)
+#: Secret key for signing CSRF tokens. Generated lazily so runtimes such
+#: as Cloudflare Workers do not request entropy outside a request context.
+_SECRET: bytes | None = os.environ.get("AIRFORM_SECRET", "").encode() or None
 
 #: How long a CSRF token stays valid (seconds). Default: 1 hour.
 CSRF_MAX_AGE: int = 3600
@@ -39,7 +39,7 @@ def generate_csrf_token() -> str:
     timestamp = str(int(time.time()))
     nonce = secrets.token_urlsafe(16)
     payload = f"{timestamp}:{nonce}"
-    sig = hmac.new(_SECRET, payload.encode(), hashlib.sha256).hexdigest()
+    sig = hmac.new(_get_secret(), payload.encode(), hashlib.sha256).hexdigest()
     return f"{payload}:{sig}"
 
 
@@ -57,7 +57,7 @@ def _check_csrf_token(token: str, max_age: int = CSRF_MAX_AGE) -> str:
     timestamp_str, nonce, sig = parts
 
     expected_payload = f"{timestamp_str}:{nonce}"
-    expected_sig = hmac.new(_SECRET, expected_payload.encode(), hashlib.sha256).hexdigest()
+    expected_sig = hmac.new(_get_secret(), expected_payload.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected_sig, sig):
         msg = "Invalid CSRF token."
         raise ValueError(msg)
@@ -73,6 +73,14 @@ def _check_csrf_token(token: str, max_age: int = CSRF_MAX_AGE) -> str:
         raise ValueError(msg)
 
     return token
+
+
+def _get_secret() -> bytes:
+    """Return the configured secret, generating a process-local one on first use."""
+    global _SECRET
+    if _SECRET is None:
+        _SECRET = secrets.token_bytes(32)
+    return _SECRET
 
 
 class ValidCsrfToken(str):  # noqa: FURB189

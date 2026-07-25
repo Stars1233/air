@@ -7,10 +7,9 @@ import json
 from functools import cached_property
 from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar, Self
+from xml.etree.ElementTree import Element
 
-from rich.pretty import pretty_repr
-from selectolax.lexbor import LexborHTMLParser, LexborNode
-
+from air.tags._html import is_comment, iter_content, local_name, parse_html
 from air.tags.constants import (
     DEFAULT_INDENTATION_SIZE,
     EMPTY_JOIN_SEPARATOR,
@@ -39,7 +38,6 @@ from .utils import (
     _format_child_instantiation,
     _format_instantiation_call,
     _get_paddings,
-    _is_lexbor_html_parser_valid,
     _migrate_html_attributes_to_air_tag,
     _wrap_multiline_instantiation_args,
 )
@@ -192,7 +190,7 @@ class BaseTag:
         """Render the compact-formatted HTML representation of the tag.
 
         Returns:
-            A minimized HTML string produced by `minify_html.minify`.
+            A minimized HTML string.
         """
         return self.compact_render()
 
@@ -235,7 +233,7 @@ class BaseTag:
         """Render the compact-formatted HTML representation of the tag.
 
         Returns:
-            A minimized HTML string produced by `minify_html.minify`.
+            A minimized HTML string.
         """
         return compact_format_html(self._render())
 
@@ -568,6 +566,8 @@ class BaseTag:
             A formatted string produced by the rich pretty printer when available,
             otherwise the standard string form of the mapping.
         """
+        from rich.pretty import pretty_repr  # noqa: PLC0415
+
         return pretty_repr(
             self.to_dict(),
             max_width=max_width,
@@ -751,22 +751,25 @@ class BaseTag:
             msg = f"{cls.__name__}.from_html(html_source) expects a valid HTML string."
             raise ValueError(msg)
         is_fragment = not is_full_html_document(html_source)
-        parser = LexborHTMLParser(html_source, is_fragment=is_fragment)
-        if not _is_lexbor_html_parser_valid(parser=parser, is_fragment=is_fragment):
+        root = parse_html(html_source, document=not is_fragment)
+        if is_fragment and local_name(root.tag) == "DOCUMENT_FRAGMENT":
+            parsed_nodes = [node for node in iter_content(root) if isinstance(node, Element)]
+            root = parsed_nodes[0] if len(parsed_nodes) == 1 else root
+        if local_name(root.tag) == "DOCUMENT_FRAGMENT":
             msg = f"{cls.__name__}.from_html(html_source) is unable to parse the HTML content."
             raise ValueError(msg)
-        air_tag = cls._from_lexbor_node(parser.root)  # type: ignore[arg-type]
+        air_tag = cls._from_html_node(root)
         if not air_tag or not isinstance(air_tag, BaseTag):
             msg = f"{cls.__name__}.from_html(html_source) is unable to parse the HTML content."
             raise ValueError(msg)
         return air_tag
 
     @classmethod
-    def _from_lexbor_node(cls, node: LexborNode) -> BaseTag | str:
-        """Convert a parsed HTML LexborNode into an Air tag, text, or comment.
+    def _from_html_node(cls, node: Element | str) -> BaseTag | str:
+        """Convert a parsed HTML node into an Air tag, text, or comment.
 
         Args:
-            node: Parsed HTML LexborNode.
+            node: Parsed HTML element or text.
 
         Returns:
             An Air tag for element nodes, stripped text for text nodes, or a comment tag for comment
@@ -775,20 +778,17 @@ class BaseTag:
         Raises:
             ValueError: If the node type cannot be handled.
         """
-        if not node.tag:
-            msg = f"Unable to parse <{node!r}>."
-            raise ValueError(msg)
-        if node.is_element_node:
+        if isinstance(node, str):
+            return node
+        if is_comment(node):
+            return cls._create_tag("comment", (node.text or "").strip())
+        if local_name(node.tag):
             return cls._from_element_node(node)
-        if node.is_text_node and node.text_content:
-            return node.text_content
-        if node.is_comment_node and node.comment_content:
-            return cls._create_tag("comment", node.comment_content)
-        msg = f"Unable to parse <{node.tag}>."
+        msg = f"Unable to parse <{node!r}>."
         raise ValueError(msg)
 
     @classmethod
-    def _from_element_node(cls, node: LexborNode) -> BaseTag:
+    def _from_element_node(cls, node: Element) -> BaseTag:
         """Recursively build a tag tree from a parsed HTML element node.
 
         Args:
@@ -797,11 +797,9 @@ class BaseTag:
         Returns:
             The reconstructed Air tag for the provided node.
         """
-        children: TagChildrenType = tuple(
-            cls._from_lexbor_node(child) for child in node.iter(include_text=True, skip_empty=True)
-        )
+        children: TagChildrenType = tuple(cls._from_html_node(child) for child in iter_content(node))
         attributes: TagAttributesType = _migrate_html_attributes_to_air_tag(node)
-        return cls._create_tag(node.tag, *children, **attributes)  # ty:ignore[invalid-argument-type]
+        return cls._create_tag(local_name(node.tag), *children, **attributes)
 
     @classmethod
     def _create_tag(cls, name: str, /, *children: Renderable, **attributes: AttributeType) -> BaseTag:

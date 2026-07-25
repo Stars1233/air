@@ -3,11 +3,12 @@ from __future__ import annotations
 import ast
 from typing import TYPE_CHECKING
 
+from air.tags._html import local_name
 from air.tags.constants import AIR_PREFIX, BOOLEAN_HTML_ATTRIBUTES, INDENT_UNIT
 from air.tags.utils import migrate_attribute_name_to_air_tag
 
 if TYPE_CHECKING:
-    from selectolax.lexbor import LexborHTMLParser, LexborNode
+    from xml.etree.ElementTree import Element
 
     from .base import AttributeType, Renderable, TagAttributesType
 
@@ -80,7 +81,7 @@ def _format_attribute_instantiation(attr_name: str, attr_value: AttributeType, p
     return f"{padding}{attr_name}={attr_value!r}"
 
 
-def _migrate_html_attributes_to_air_tag(node: LexborNode) -> TagAttributesType:
+def _migrate_html_attributes_to_air_tag(node: Element) -> TagAttributesType:
     """Convert parsed HTML attributes to Air tag attribute keys.
 
     Args:
@@ -91,9 +92,9 @@ def _migrate_html_attributes_to_air_tag(node: LexborNode) -> TagAttributesType:
     """
     return {
         migrate_attribute_name_to_air_tag(attr_name): _evaluate_attribute_value_to_py(
-            tag_name=node.tag, attr_name=attr_name, attr_value=attr_value
+            tag_name=local_name(node.tag), attr_name=local_name(attr_name), attr_value=attr_value
         )
-        for attr_name, attr_value in node.attributes.items()
+        for attr_name, attr_value in node.attrib.items()
     }
 
 
@@ -114,7 +115,7 @@ def _evaluate_attribute_value_to_py(tag_name: str | None, attr_name: str, attr_v
         The evaluated value of the given attribute. The type of the returned value
         may vary depending on the input (e.g., boolean, literal value, or original string).
     """
-    if attr_value is None:
+    if not attr_value:
         return True
     if attr_value.lower() == "true" or attr_value.lower() == "false":
         return attr_value
@@ -168,29 +169,3 @@ def is_conforming_boolean_value(attr_name: str, attr_value: str | None) -> bool:
         comparison or is `None`/evaluates to `False`. Otherwise, False.
     """
     return not attr_value or attr_name.casefold() == attr_value.casefold()
-
-
-def _is_lexbor_html_parser_valid(parser: LexborHTMLParser, *, is_fragment: bool) -> bool:
-    """
-    Validates the given Lexbor HTML parser based on the provided conditions.
-
-    This function checks whether the provided parser is valid by ensuring that
-    essential components of the parser, such as the root, HTML, head, and body
-    elements, meet the required conditions. Depending on whether the `is_fragment`
-    flag is set, additional checks for the head and body elements are performed.
-
-    Args:
-        parser: The HTML parser to validate.
-        is_fragment: Indicates whether the validation should treat the parser's
-            content as a fragment. When True, the absence of head and body elements
-            does not result in invalidation.
-
-    Returns:
-        True if the parser is deemed valid based on the validation criteria;
-        otherwise, False.
-    """
-    if not parser or parser.root is None or not parser.root.html or not parser.html:
-        return False
-    if is_fragment:
-        return parser.head is None and parser.body is None
-    return parser.head is not None and parser.body is not None

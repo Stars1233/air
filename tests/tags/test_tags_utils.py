@@ -19,57 +19,7 @@ from air.tags.utils import SafeStr
 from .test_base_tag import FRAGMENT_HTML_SAMPLE_FILE_PATH
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
     from pathlib import Path
-
-
-@pytest.fixture
-def stub_lxml(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
-    captured: dict[str, Any] = {}
-
-    class DummyNode:
-        def __init__(self, label: str) -> None:
-            self.label = label
-            self.indented = False
-
-    def document_fromstring(source: str, *, ensure_head_body: bool) -> DummyNode:
-        node = DummyNode(f"doc::{source}::{ensure_head_body}")
-        captured["document"] = node
-        return node
-
-    def fromstring(source: str) -> DummyNode:
-        node = DummyNode(f"node::{source}")
-        captured["node"] = node
-        return node
-
-    def indent(node: DummyNode) -> None:
-        node.indented = True
-
-    def tostring(node: DummyNode, encoding: str, *, pretty_print: bool, doctype: str | None) -> str:
-        captured["serialized"] = (node.label, encoding, pretty_print, doctype)
-        return f"serialized::{node.label}::{encoding}::{pretty_print}::{doctype}"
-
-    lxml_module = types.ModuleType("lxml")
-    etree_module = types.ModuleType("lxml.etree")
-    html_module = types.ModuleType("lxml.html")
-
-    etree_module.indent = indent
-    html_module.document_fromstring = document_fromstring
-    html_module.fromstring = fromstring
-    html_module.tostring = tostring
-
-    lxml_module.etree = etree_module
-    lxml_module.html = html_module
-
-    monkeypatch.setitem(sys.modules, "lxml", lxml_module)
-    monkeypatch.setitem(sys.modules, "lxml.etree", etree_module)
-    monkeypatch.setitem(sys.modules, "lxml.html", html_module)
-
-    yield captured
-
-    monkeypatch.delitem(sys.modules, "lxml", raising=False)
-    monkeypatch.delitem(sys.modules, "lxml.etree", raising=False)
-    monkeypatch.delitem(sys.modules, "lxml.html", raising=False)
 
 
 @pytest.fixture
@@ -190,50 +140,37 @@ def test_pretty_format_html_unescapes_entities(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_compact_format_html_minifies() -> None:
-    assert len(utils.compact_format_html(SMALL_AIR_TAG_SAMPLE.render())) == 760
-    assert len(utils.compact_format_html(AIR_TAG_SAMPLE.render())) == 7536
+    small_source = SMALL_AIR_TAG_SAMPLE.render()
+    source = AIR_TAG_SAMPLE.render()
+
+    assert len(utils.compact_format_html(small_source)) < len(small_source)
+    assert len(utils.compact_format_html(source)) < len(source)
 
 
 def test_compact_format_html_minifies_with_safe_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
-    def fake_minify(source: str, **options: Any) -> str:
+    def fake_compact(source: str, *, document: bool) -> str:
         captured["source"] = source
-        captured["options"] = options
+        captured["document"] = document
         return "minified"
 
-    monkeypatch.setattr(utils.minify_html, "minify", fake_minify)
+    monkeypatch.setattr(utils, "compact_html", fake_compact)
 
     result = utils.compact_format_html("<p> spaced </p>")
 
     assert result == "minified"
     assert captured["source"] == "<p> spaced </p>"
-    assert captured["options"] == {
-        "allow_noncompliant_unquoted_attribute_values": False,
-        "allow_optimal_entities": False,
-        "allow_removing_spaces_between_attributes": False,
-        "keep_closing_tags": False,
-        "keep_comments": False,
-        "keep_html_and_head_opening_tags": False,
-        "keep_input_type_text_attr": False,
-        "keep_ssi_comments": False,
-        "minify_css": True,
-        "minify_doctype": False,
-        "minify_js": True,
-        "preserve_brace_template_syntax": False,
-        "preserve_chevron_percent_template_syntax": False,
-        "remove_bangs": False,
-        "remove_processing_instructions": True,
-    }
+    assert captured["document"] is False
 
 
-def test_format_html_uses_lxml_document_path(stub_lxml: dict[str, Any]) -> None:
+def test_format_html_uses_document_path() -> None:
     result = utils.format_html("<p/>", with_body=True, with_head=True, with_doctype=True, pretty=True)
 
     assert result == "<!doctype html>\n<html>\n  <head></head>\n  <body>\n    <p></p>\n  </body>\n</html>\n"
 
 
-def test_format_html_uses_lxml_fragment_path(stub_lxml: dict[str, Any]) -> None:
+def test_format_html_uses_fragment_path() -> None:
     result = utils.format_html("<span/>", with_body=False, pretty=False)
 
     assert result == "<span></span>"

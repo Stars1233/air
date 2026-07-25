@@ -1,6 +1,7 @@
 """Use routing if you want a single cohesive app where all routes share middlewares and error handling."""
 
 import inspect
+import sys
 from collections.abc import Callable, Sequence
 from enum import Enum
 from functools import wraps
@@ -41,6 +42,11 @@ fastapi.encoders.ENCODERS_BY_TYPE[BaseTag] = str
 fastapi.encoders.encoders_by_class_tuples = fastapi.encoders.generate_encoders_by_class_tuples(
     fastapi.encoders.ENCODERS_BY_TYPE
 )
+
+
+def _threads_available() -> bool:
+    """Return whether synchronous handlers can be dispatched to worker threads."""
+    return sys.platform != "emscripten"
 
 
 class RouteCallable(Protocol):
@@ -154,9 +160,9 @@ class RouterMixin:
     ) -> Callable[..., Any]:
         """Wrap func to convert non-Response returns using response_class.
 
-        Preserves the original sync/async nature so FastAPI dispatches
-        sync handlers to a threadpool instead of blocking the event
-        loop (#1067).
+        Preserves the original sync/async nature where threads are available.
+        On WebAssembly runtimes such as Cloudflare Workers, sync handlers are
+        wrapped as coroutines because Python threads are unavailable.
 
         Returns:
             A wrapped endpoint function with the same sync/async signature.
@@ -179,7 +185,7 @@ class RouterMixin:
                     return result
                 return response_class(result, **response_kwargs)
 
-        else:
+        elif _threads_available():
 
             @wraps(func)
             def endpoint(*args: Any, **kw: Any) -> Response:
@@ -187,6 +193,15 @@ class RouterMixin:
                 if result is None:
                     message = "Air endpoint returned None; did you forget a return statement?"
                     raise TypeError(message)
+                if isinstance(result, Response):
+                    return result
+                return response_class(result, **response_kwargs)
+
+        else:
+
+            @wraps(func)
+            async def endpoint(*args: Any, **kw: Any) -> Response:
+                result = func(*args, **kw)
                 if isinstance(result, Response):
                     return result
                 return response_class(result, **response_kwargs)

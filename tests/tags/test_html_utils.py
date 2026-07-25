@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-from lxml.etree import ParserError
 
 from air.tags.constants import HTML_DOCTYPE
 
@@ -109,13 +108,13 @@ def test_pretty_format_html_all_parameter_combinations(*, with_body: bool, with_
 # -----------------------------
 
 
-def test_format_html_empty_raises_parser_error() -> None:
-    with pytest.raises(ParserError) as exc:
+def test_format_html_empty_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="HTML source must not be empty") as exc:
         _ = format_html("")  # no defaults passed
-    assert exc.type.__name__ == "ParserError"
+    assert exc.type is ValueError
 
 
-def test_pretty_format_html_empty_raises_parser_error() -> None:
-    with pytest.raises(ParserError) as exc:
+def test_pretty_format_html_empty_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="HTML source must not be empty") as exc:
         _ = pretty_format_html("")  # no defaults passed
-    assert exc.type.__name__ == "ParserError"
+    assert exc.type is ValueError

@@ -13,25 +13,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.error import URLError
 
-import minify_html
-import nh3
-from lxml.etree import indent as indent_element_tree
-
-# noinspection PyProtectedMember
-from lxml.html import (
-    HtmlElement,
-    document_fromstring as parse_html_document_from_string,
-    fromstring as parse_html_from_string,
-    tostring as serialize_document_to_html_string,
-)
-from rich import box
-from rich.console import Console
-from rich.panel import Panel
-from rich.syntax import Syntax
-from rich.text import Text
-
 from air.exceptions import BrowserOpenError
 
+from ._html import compact_html, local_name, parse_html, serialize_html
 from .constants import (
     _LOOKS_LIKE_FULL_HTML_UNICODE_RE,
     _LOOKS_LIKE_HTML_UNICODE_RE,
@@ -41,7 +25,6 @@ from .constants import (
     DATA_URL_MAX,
     DEFAULT_ENCODING,
     DEFAULT_THEME,
-    FORMAT_HTML_ENCODING,
     HOMEPAGE_FILE_NAME,
     HTML_DOCTYPE,
     HTML_LEXER,
@@ -56,7 +39,14 @@ from .constants import (
 )
 
 if TYPE_CHECKING:
+    from rich.console import Console
+
     from .types import LexerType, StrPath
+
+_HEAD_FRAGMENT_RE = re.compile(
+    r"^\s*<(?:base|link|meta|script|style|title)\b",
+    re.IGNORECASE,
+)
 
 
 def is_full_html_document(text: str) -> bool:
@@ -85,15 +75,9 @@ def looks_like_html(text: str) -> bool:
     The function checks whether the provided text both passes an HTML detection
     test and matches a specific regular expression for HTML-like Unicode strings.
 
-    This uses two checks:
-
-    1) `nh3.is_html(text)` does a general HTML detection check, aiming to answer
-       "is there HTML markup here at all?" (it is a broad heuristic rather than a strict full-document validator).
-
-    2) `_LOOKS_LIKE_HTML_UNICODE_RE.fullmatch(text)` enforces this project's
-       stricter "HTML-like string" shape requirements, such as allowing leading
-       and trailing whitespace, optional doctype, and the expected tag structure
-       for the inputs we accept as "looks like HTML".
+    `_LOOKS_LIKE_HTML_UNICODE_RE.fullmatch(text)` enforces this project's
+    HTML-like string shape requirements, such as allowing leading and trailing
+    whitespace, an optional doctype, and balanced outer tags.
 
     Args:
         text: HTML source string to test.
@@ -102,7 +86,7 @@ def looks_like_html(text: str) -> bool:
         bool: True if the text is detected as HTML and matches the HTML-like
             Unicode pattern; otherwise, False.
     """
-    return nh3.is_html(text) and bool(_LOOKS_LIKE_HTML_UNICODE_RE.fullmatch(text))
+    return bool(_LOOKS_LIKE_HTML_UNICODE_RE.fullmatch(text))
 
 
 def migrate_attribute_name_to_html(attr_name: str) -> str:
@@ -164,7 +148,7 @@ def extract_html_comment(text: str) -> str:
 
 
 def compact_format_html(source: str) -> str:
-    """Minify HTML markup with safe defaults.
+    """Minify HTML markup with HTML5-aware safe defaults.
 
     Args:
         source: Raw HTML markup to compress.
@@ -172,30 +156,10 @@ def compact_format_html(source: str) -> str:
     Returns:
         Space-efficient HTML suitable for inline embedding or network transfer.
 
-    Note:
-        Configuration opts into standards-safe options from ``minify_html`` to
-        retain required attribute spacing while stripping comments, optional
-        closing tags, and excess whitespace, and to minify inline CSS/JS.
+    Comments, optional closing tags, and excess whitespace are removed while
+    preserving HTML5 parsing semantics.
     """
-    # noinspection PyArgumentEqualDefault
-    return minify_html.minify(
-        source,  # your HTML string
-        allow_noncompliant_unquoted_attribute_values=False,  # keep spec-legal quoting
-        allow_optimal_entities=False,  # avoid entity tweaks that fail validation
-        allow_removing_spaces_between_attributes=False,  # keep the required inter-attribute space
-        keep_closing_tags=False,  # drop optional closing tags
-        keep_comments=False,  # remove comments
-        keep_html_and_head_opening_tags=False,  # drop optional <html>/<head> openings
-        keep_input_type_text_attr=False,  # drop default type="text"
-        keep_ssi_comments=False,  # remove SSI comments
-        minify_css=True,  # minify <style>/style=""
-        minify_doctype=False,  # don't over-minify DOCTYPE (can be non-spec)
-        minify_js=True,  # minify inline <script>
-        preserve_brace_template_syntax=False,  # assume real HTML, not templates
-        preserve_chevron_percent_template_syntax=False,  # assume real HTML, not templates
-        remove_bangs=False,  # keep “!” so declarations stay valid
-        remove_processing_instructions=True,  # strip stray PIs (<?…?>)
-    )
+    return compact_html(source, document=is_full_html_document(source))
 
 
 def pretty_format_html(
@@ -232,7 +196,7 @@ def format_html(
     with_doctype: bool = False,
     pretty: bool = False,
 ) -> str:
-    """Format HTML markup using `lxml`.
+    """Format HTML markup using the HTML5 parsing algorithm.
 
     Args:
         source: Raw HTML markup to format.
@@ -242,20 +206,23 @@ def format_html(
         pretty: Whether to indent the output for readability.
 
     Returns:
-        The serialized HTML produced by `lxml.html.tostring`.
+        HTML serialized from the parsed element tree.
     """
-    html_element: HtmlElement = (
-        parse_html_document_from_string(source, ensure_head_body=with_head)
-        if with_body
-        else parse_html_from_string(source)
-    )
-    if pretty:
-        indent_element_tree(html_element)
-    doctype = HTML_DOCTYPE if with_doctype else None
-    # noinspection PyTypeChecker
-    return serialize_document_to_html_string(
-        doc=html_element, encoding=FORMAT_HTML_ENCODING, pretty_print=pretty, doctype=doctype
-    )
+    source_is_document = is_full_html_document(source)
+    head_fragment = bool(_HEAD_FRAGMENT_RE.match(source))
+    parse_as_document = with_body or source_is_document or head_fragment
+    root = parse_html(source, document=parse_as_document)
+    if parse_as_document:
+        source_has_head = bool(re.search(r"<head\b", source, re.IGNORECASE))
+        source_has_body = bool(re.search(r"<body\b", source, re.IGNORECASE))
+        keep_head = with_head if with_body and not source_is_document else source_has_head or head_fragment
+        keep_body = with_body if not source_is_document else source_has_body
+        for child in list(root):
+            name = local_name(child.tag)
+            if (name == "head" and not keep_head) or (name == "body" and not keep_body):
+                root.remove(child)
+    rendered = serialize_html(root, pretty=pretty)
+    return f"{HTML_DOCTYPE}\n{rendered}" if with_doctype else rendered
 
 
 def open_local_file_in_the_browser(path: StrPath) -> None:
@@ -499,6 +466,12 @@ def _get_pretty_console(
     Returns:
         A configured Console instance with the styled syntax and panel displayed.
     """
+    from rich import box  # noqa: PLC0415
+    from rich.console import Console  # noqa: PLC0415
+    from rich.panel import Panel  # noqa: PLC0415
+    from rich.syntax import Syntax  # noqa: PLC0415
+    from rich.text import Text  # noqa: PLC0415
+
     syntax = Syntax(code=source, lexer=lexer, theme=theme, line_numbers=True, indent_guides=True, word_wrap=True)
     title = Text(panel_title, style=PANEL_TITLE_STYLE)
     panel = Panel(

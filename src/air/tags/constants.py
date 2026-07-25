@@ -98,7 +98,6 @@ BOOLEAN_HTML_ATTRIBUTES: Final = {
     "shadowrootdelegatesfocus": frozenset({"template"}),
     "shadowrootserializable": frozenset({"template"}),
 }
-FORMAT_HTML_ENCODING: Final = "unicode"
 HTML_DOCTYPE: Final = "<!doctype html>"
 DEFAULT_THEME: Final = "dracula"
 HTML_PANEL_TITLE: Final = "Air → HTML"

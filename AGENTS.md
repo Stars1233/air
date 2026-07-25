@@ -111,6 +111,10 @@ All standard HTTP methods: `app.get()`, `app.post()`, `app.put()`, `app.patch()`
 
 Use `async def` when the handler calls `await` (e.g. `await request.form()`, `await request.json()`). Use plain `def` for everything else. Both work in all cases, but mixing `await` into a `def` route is a syntax error, and using `async def` without `await` wastes no resources but is unnecessary.
 
+On WebAssembly runtimes such as Cloudflare Workers, Air runs plain `def` handlers
+on the event loop because Python threads are unavailable. Keep synchronous work
+short, and use `async def` for handlers that perform I/O.
+
 ### Reverse URL resolution
 
 Every decorated route gets a `.url()` method automatically:
