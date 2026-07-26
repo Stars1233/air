@@ -166,6 +166,9 @@ class RouterMixin:
             @wraps(func)
             async def endpoint(*args: Any, **kw: Any) -> Response:
                 result = await func(*args, **kw)
+                if result is None:
+                    message = "Air endpoint returned None; did you forget a return statement?"
+                    raise TypeError(message)
                 if isinstance(result, Response):
                     return result
                 return response_class(result, **response_kwargs)
@@ -175,6 +178,9 @@ class RouterMixin:
             @wraps(func)
             def endpoint(*args: Any, **kw: Any) -> Response:
                 result = func(*args, **kw)
+                if result is None:
+                    message = "Air endpoint returned None; did you forget a return statement?"
+                    raise TypeError(message)
                 if isinstance(result, Response):
                     return result
                 return response_class(result, **response_kwargs)
