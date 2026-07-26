@@ -106,7 +106,7 @@ requires-dist = [
     { name = "lxml", specifier = ">=6.0.2" },
     { name = "minify-html", specifier = ">=0.18.1" },
     { name = "nh3", specifier = ">=0.3.2" },
-    { name = "pygments", specifier = "==2.19.2" },
+    { name = "pygments", specifier = ">=2.19.2,!=2.20.0" },
     { name = "python-multipart", specifier = ">=0.0.22" },
     { name = "rich", specifier = ">=14.3.2" },
     { name = "selectolax", specifier = ">=0.4.6" },
