@@ -296,7 +296,7 @@ def test_air_router_url_helper_supports_query_params() -> None:
     @router.get("/items/{item_id}")
     def get_item(
         item_id: int,
-        tags: list[str] | None = air.Query(None),  # noqa: B008
+        tags: list[str] | None = air.Query(None),
         page: int = 1,
     ) -> air.P:
         return air.P(f"Item {item_id} tags {tags} page {page}")
@@ -320,7 +320,7 @@ def test_air_router_url_helper_empty_query_params() -> None:
     @router.get("/items/{item_id}")
     def get_item(
         item_id: int,
-        tags: list[str] | None = air.Query(None),  # noqa: B008
+        tags: list[str] | None = air.Query(None),
         page: int = 1,
     ) -> air.P:
         return air.P(f"Item {item_id} tags {tags} page {page}")
@@ -344,7 +344,7 @@ def test_air_router_url_helper_supports_query_params_with_query() -> None:
     @router.get("/items/{item_id}")
     def get_item(
         item_id: int,
-        tags: list[str] | None = air.Query(None),  # noqa: B008
+        tags: list[str] | None = air.Query(None),
         page: int = air.Query(1),
     ) -> air.P:
         return air.P(f"Item {item_id} tags {tags} page {page}")
@@ -599,3 +599,105 @@ def test_air_router_proxy_properties() -> None:
 
     # Test generate_unique_id_function property
     assert router.generate_unique_id_function is not None
+
+
+# =========================================================================
+# HEAD request support (issue #1122)
+# =========================================================================
+
+
+def test_head_on_page_route_returns_200() -> None:
+    """HEAD on an @app.page route should return 200, not 405.
+
+    Facebook's sharing debugger and other crawlers send HEAD requests
+    before fetching the full page. Without HEAD support, they see 405
+    and give up.
+    """
+    app = air.Air()
+
+    @app.page
+    def index() -> H1:
+        return air.H1("Hello, World!")
+
+    client = TestClient(app)
+
+    response = client.head("/")
+    assert response.status_code == 200
+
+
+def test_head_on_get_route_returns_200() -> None:
+    """HEAD on an @app.get route should return 200, not 405."""
+    app = air.Air()
+    router = air.AirRouter()
+
+    @router.get("/some-path")
+    def some_page() -> H1:
+        return air.H1("Some page")
+
+    app.include_router(router)
+    client = TestClient(app)
+
+    response = client.head("/some-path")
+    assert response.status_code == 200
+
+
+def test_head_response_has_correct_content_type() -> None:
+    """HEAD response should have the same content-type as GET."""
+    app = air.Air()
+
+    @app.page
+    def index() -> H1:
+        return air.H1("Hello, World!")
+
+    client = TestClient(app)
+
+    response = client.head("/")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/html; charset=utf-8"
+
+
+def test_head_response_has_empty_body() -> None:
+    """HEAD response body should be empty per HTTP spec."""
+    app = air.Air()
+
+    @app.page
+    def index() -> H1:
+        return air.H1("Hello, World!")
+
+    client = TestClient(app)
+
+    response = client.head("/")
+    assert response.status_code == 200
+    assert response.content == b""
+
+
+def test_head_on_router_page_returns_200() -> None:
+    """HEAD should work through an AirRouter, not just directly on Air."""
+    app = air.Air()
+    router = air.AirRouter()
+
+    @router.page
+    def about() -> H1:
+        return air.H1("About page")
+
+    app.include_router(router)
+    client = TestClient(app)
+
+    response = client.head("/about")
+    assert response.status_code == 200
+
+
+def test_head_not_added_to_post_only_route() -> None:
+    """HEAD should NOT be implicitly added to non-GET methods like POST."""
+    app = air.Air()
+    router = air.AirRouter()
+
+    @router.post("/submit")
+    def submit() -> H1:
+        return air.H1("Submitted")
+
+    app.include_router(router)
+    client = TestClient(app)
+
+    response = client.head("/submit")
+    assert response.status_code == 405

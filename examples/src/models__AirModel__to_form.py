@@ -1,8 +1,6 @@
-from airform import default_form_widget
-from airmodel import AirModel
-
 import air
-from air import AirForm
+from air import AirForm, AirModel
+from air.form import default_form_widget
 
 app = air.Air()
 
@@ -29,7 +27,7 @@ def custom_widget(
 
 class ContactForm(AirForm[ContactModel]):
     excludes = (("phone", "display"),)  # Don't render phone, but keep it in save_data
-    widget = custom_widget
+    widget = staticmethod(custom_widget)
 
 
 @app.page

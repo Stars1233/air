@@ -455,6 +455,26 @@ def test_sync_endpoint_returns_html() -> None:
         assert response.headers["content-type"] == "text/html; charset=utf-8"
 
 
+def test_missing_endpoint_return_raises_clear_error() -> None:
+    """Sync and async endpoints must not render a misleading 200 ``None`` page."""
+    app = air.Air()
+
+    @app.get("/sync")
+    def sync_page() -> None:
+        pass
+
+    @app.get("/async")
+    async def async_page() -> None:
+        pass
+
+    client = TestClient(app)
+    match = "Air endpoint returned None; did you forget a return statement"
+
+    for path in ["/sync", "/async"]:
+        with pytest.raises(TypeError, match=match):
+            client.get(path)
+
+
 def test_sync_endpoint_not_on_event_loop() -> None:
     """Sync endpoints run in a threadpool, not blocking the event loop (#1067)."""
     import asyncio  # noqa: PLC0415
