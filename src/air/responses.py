@@ -1,7 +1,7 @@
 """Air uses custom response classes to improve the developer experience."""
 
 from collections.abc import Mapping
-from typing import override
+from typing import Any, override
 
 from fastapi import status
 from starlette.background import BackgroundTask
@@ -24,18 +24,20 @@ class AirResponse(HTMLResponse):
     """Response class to handle air.tags.Tags or HTML (from Jinja2)."""
 
     @override
-    def render(self, tag: BaseTag | str | None) -> bytes | memoryview:  # ty: ignore[invalid-method-override]
+    def render(self, content: Any) -> bytes | memoryview:
         """Render Tag elements to bytes of HTML.
 
         Returns:
             Rendered HTML as bytes or memoryview.
         Raises:
-            TypeError: If tag (if not None) is neither a BaseTag nor a string.
+            TypeError: If content is neither a BaseTag, a string, nor None.
         """
-        if tag is not None and not isinstance(tag, (BaseTag, str)):
-            msg = f"render() expected BaseTag or str, got {type(tag).__name__!r}"
+        if content is not None and not isinstance(content, (BaseTag, str)):
+            msg = f"render() expected BaseTag or str, got {type(content).__name__!r}"
             raise TypeError(msg)
-        return super().render(str(tag))
+        if isinstance(content, BaseTag):
+            content = str(content)
+        return super().render(content)
 
 
 TagResponse = AirResponse

@@ -560,8 +560,8 @@ def test_custom_response_class() -> None:
     class WrappingResponse(air.AirResponse):
         """Custom response that wraps content in an <article> tag."""
 
-        def render(self, tag: object) -> bytes:
-            return str(air.Article(tag)).encode()
+        def render(self, content: object) -> bytes:
+            return str(air.Article(content)).encode()
 
     @app.get("/custom", response_class=WrappingResponse)
     def custom_page() -> air.H1:
