@@ -23,6 +23,18 @@ from .exception_handlers import DEFAULT_EXCEPTION_HANDLERS, ExceptionHandlersTyp
 from .responses import AirResponse
 from .routing import AirRoute, AirRouter, RouterMixin
 
+# FastAPI arguments whose values Air deliberately controls.
+_FIXED_FASTAPI_KWARGS = frozenset({
+    "default_response_class",
+    "on_startup",
+    "on_shutdown",
+    "docs_url",
+    "redoc_url",
+    "openapi_url",
+    "webhooks",
+    "deprecated",
+})
+
 
 class Air(RouterMixin):
     """Air web framework - HTML-first web apps powered by FastAPI.
@@ -299,18 +311,10 @@ class Air(RouterMixin):
 
         # Create internal FastAPI instance
         if fastapi_app is None:
-            fastapi_kwargs_with_fixed_values = {
-                "default_response_class",
-                "on_startup",
-                "on_shutdown",
-                "docs_url",
-                "redoc_url",
-                "openapi_url",
-                "webhooks",
-                "deprecated",
-            }
-
-            if kwargs_supplied := extra.keys() & fastapi_kwargs_with_fixed_values:
+            # These arguments are set explicitly below. Catching duplicates here
+            # replaces FastAPI's confusing "multiple values" TypeError with the
+            # supported customization path.
+            if kwargs_supplied := extra.keys() & _FIXED_FASTAPI_KWARGS:
                 kwargs_supplied_str = ", ".join(sorted(f"`{kwarg}`" for kwarg in kwargs_supplied))
                 msg = f"Use `fastapi_app` to pass {kwargs_supplied_str} instead."
                 raise ValueError(msg)
