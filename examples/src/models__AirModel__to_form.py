@@ -27,7 +27,7 @@ def custom_widget(
 
 class ContactForm(AirForm[ContactModel]):
     excludes = (("phone", "display"),)  # Don't render phone, but keep it in save_data
-    widget = custom_widget
+    widget = staticmethod(custom_widget)
 
 
 @app.page
