@@ -27,6 +27,29 @@ def test_air_app_factory() -> None:
     assert response.text == "<h1>Hello, World!</h1>"
 
 
+@pytest.mark.parametrize(
+    "parameter_name",
+    [
+        "default_response_class",
+        "on_startup",
+        "on_shutdown",
+        "docs_url",
+        "redoc_url",
+        "openapi_url",
+        "webhooks",
+        "deprecated",
+    ],
+)
+def test_air_app_factory_rejects_fixed_fastapi_params(parameter_name: str) -> None:
+    # https://github.com/feldroy/air/issues/1073
+
+    with pytest.raises(
+        ValueError,
+        match=rf"Use `fastapi_app` to pass `{parameter_name}` instead\.",
+    ):
+        air.Air(**{parameter_name: None})
+
+
 def test_air_plus_fastapi() -> None:
     app = FastAPI()
     html = air.Air()
