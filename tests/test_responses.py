@@ -1,11 +1,12 @@
 from collections.abc import AsyncGenerator
-from typing import override
+from typing import Any, override
 
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
 import air
-from air import H1, AirResponse, Article, BaseTag, Div, Html, Main
+from air import H1, AirResponse, Article, Div, Html, Main
 from air.responses import TagResponse
 
 from .utils import clean_doc
@@ -13,8 +14,8 @@ from .utils import clean_doc
 
 class CustomLayoutResponse(air.AirResponse):
     @override
-    def render(self, tag: BaseTag | str) -> bytes | memoryview:
-        return super().render(air.Html(air.Body(tag)))
+    def render(self, content: Any) -> bytes | memoryview:
+        return super().render(air.Html(air.Body(content)))
 
 
 def test_tag_response_obj() -> None:
@@ -98,6 +99,20 @@ def test_air_response_type() -> None:
     assert (
         response.text == "<main><h1>Hello, clean HTML response!</h1><p>This is a paragraph in the response.</p></main>"
     )
+
+
+def test_air_response_without_content_is_empty() -> None:
+    response = air.AirResponse()
+
+    assert response.body == b""
+
+
+def test_air_response_rejects_unsupported_content() -> None:
+    with pytest.raises(
+        TypeError,
+        match=r"render\(\) expected BaseTag or str, got 'int'",
+    ):
+        air.AirResponse(42)
 
 
 def test_air_response_html() -> None:
