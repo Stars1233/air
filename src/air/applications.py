@@ -23,6 +23,18 @@ from .exception_handlers import DEFAULT_EXCEPTION_HANDLERS, ExceptionHandlersTyp
 from .responses import AirResponse
 from .routing import AirRoute, AirRouter, RouterMixin
 
+# FastAPI arguments whose values Air deliberately controls.
+_FIXED_FASTAPI_KWARGS = frozenset({
+    "default_response_class",
+    "on_startup",
+    "on_shutdown",
+    "docs_url",
+    "redoc_url",
+    "openapi_url",
+    "webhooks",
+    "deprecated",
+})
+
 
 class Air(RouterMixin):
     """Air web framework - HTML-first web apps powered by FastAPI.
@@ -270,26 +282,43 @@ class Air(RouterMixin):
         This preserves most FastAPI initialization parameters while setting:
             - AirResponse as the default response class.
             - AirRoute as the default route class.
+
+        Raises:
+            ValueError: If fastapi_app is None and kwargs contain parameters
+                that should be passed via fastapi_app instead. These
+                parameters are: default_response_class, on_startup,
+                on_shutdown, docs_url, redoc_url, openapi_url,
+                webhooks, deprecated.
         """
         self.path_separator = path_separator
         if exception_handlers is None:
             exception_handlers = {}
         exception_handlers = DEFAULT_EXCEPTION_HANDLERS | exception_handlers
 
-        # Auto-detect database: DATABASE_URL env var + airmodel installed
+        # Auto-detect database: DATABASE_URL env var + asyncpg installed
         self.db = None
         database_url = os.environ.get("DATABASE_URL")
         if database_url is not None:
             try:
-                from airmodel import AirDB  # noqa: PLC0415
+                import asyncpg  # noqa: PLC0415, F401
             except ImportError:
                 pass
             else:
+                from air.model import AirDB  # noqa: PLC0415
+
                 self.db = AirDB()
                 lifespan = self._compose_db_lifespan(self.db, database_url, lifespan)
 
         # Create internal FastAPI instance
         if fastapi_app is None:
+            # These arguments are set explicitly below. Catching duplicates here
+            # replaces FastAPI's confusing "multiple values" TypeError with the
+            # supported customization path.
+            if kwargs_supplied := extra.keys() & _FIXED_FASTAPI_KWARGS:
+                kwargs_supplied_str = ", ".join(sorted(f"`{kwarg}`" for kwarg in kwargs_supplied))
+                msg = f"Use `fastapi_app` to pass {kwargs_supplied_str} instead."
+                raise ValueError(msg)
+
             self._app = FastAPI(
                 debug=debug,
                 routes=routes,

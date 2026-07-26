@@ -1,3 +1,4 @@
+import pytest
 from fastapi import Depends, FastAPI
 from fastapi.routing import APIRouter
 from fastapi.testclient import TestClient
@@ -24,6 +25,29 @@ def test_air_app_factory() -> None:
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/html; charset=utf-8"
     assert response.text == "<h1>Hello, World!</h1>"
+
+
+@pytest.mark.parametrize(
+    "parameter_name",
+    [
+        "default_response_class",
+        "on_startup",
+        "on_shutdown",
+        "docs_url",
+        "redoc_url",
+        "openapi_url",
+        "webhooks",
+        "deprecated",
+    ],
+)
+def test_air_app_factory_rejects_fixed_fastapi_params(parameter_name: str) -> None:
+    # https://github.com/feldroy/air/issues/1073
+
+    with pytest.raises(
+        ValueError,
+        match=rf"Use `fastapi_app` to pass `{parameter_name}` instead\.",
+    ):
+        air.Air(**{parameter_name: None})
 
 
 def test_air_plus_fastapi() -> None:
@@ -445,6 +469,26 @@ def test_sync_endpoint_returns_html() -> None:
         response = client.get(path)
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/html; charset=utf-8"
+
+
+def test_missing_endpoint_return_raises_clear_error() -> None:
+    """Sync and async endpoints must not render a misleading 200 ``None`` page."""
+    app = air.Air()
+
+    @app.get("/sync")
+    def sync_page() -> None:
+        pass
+
+    @app.get("/async")
+    async def async_page() -> None:
+        pass
+
+    client = TestClient(app)
+    match = "Air endpoint returned None; did you forget a return statement"
+
+    for path in ["/sync", "/async"]:
+        with pytest.raises(TypeError, match=match):
+            client.get(path)
 
 
 def test_sync_endpoint_not_on_event_loop() -> None:
