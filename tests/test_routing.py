@@ -534,6 +534,22 @@ def test_air_router_sync_dispatch_without_threads(monkeypatch: pytest.MonkeyPatc
     assert has_loop
 
 
+def test_air_router_missing_sync_return_without_threads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WebAssembly sync endpoints preserve Air's missing-return error."""
+    monkeypatch.setattr(routing, "_threads_available", lambda: False)
+    app = air.Air()
+
+    @app.get("/sync")
+    def sync_page() -> None:
+        pass
+
+    with pytest.raises(
+        TypeError,
+        match="Air endpoint returned None; did you forget a return statement",
+    ):
+        TestClient(app).get("/sync")
+
+
 def test_air_router_default_404_handler() -> None:
     """Test that AirRouter correctly configures the default 404 handler."""
     router = air.AirRouter(prefix="/api")

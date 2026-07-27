@@ -49,6 +49,24 @@ def _threads_available() -> bool:
     return sys.platform != "emscripten"
 
 
+def _to_response(
+    result: Any,
+    response_class: type[Response],
+    response_kwargs: dict[str, Any],
+) -> Response:
+    """Convert a route result to a response while rejecting missing returns.
+
+    Raises:
+        TypeError: If the endpoint returned ``None``.
+    """
+    if result is None:
+        message = "Air endpoint returned None; did you forget a return statement?"
+        raise TypeError(message)
+    if isinstance(result, Response):
+        return result
+    return response_class(result, **response_kwargs)
+
+
 class RouteCallable(Protocol):
     """Protocol for route functions.
 
@@ -178,33 +196,21 @@ class RouterMixin:
             @wraps(func)
             async def endpoint(*args: Any, **kw: Any) -> Response:
                 result = await func(*args, **kw)
-                if result is None:
-                    message = "Air endpoint returned None; did you forget a return statement?"
-                    raise TypeError(message)
-                if isinstance(result, Response):
-                    return result
-                return response_class(result, **response_kwargs)
+                return _to_response(result, response_class, response_kwargs)
 
         elif _threads_available():
 
             @wraps(func)
             def endpoint(*args: Any, **kw: Any) -> Response:
                 result = func(*args, **kw)
-                if result is None:
-                    message = "Air endpoint returned None; did you forget a return statement?"
-                    raise TypeError(message)
-                if isinstance(result, Response):
-                    return result
-                return response_class(result, **response_kwargs)
+                return _to_response(result, response_class, response_kwargs)
 
         else:
 
             @wraps(func)
             async def endpoint(*args: Any, **kw: Any) -> Response:
                 result = func(*args, **kw)
-                if isinstance(result, Response):
-                    return result
-                return response_class(result, **response_kwargs)
+                return _to_response(result, response_class, response_kwargs)
 
         return endpoint
 
