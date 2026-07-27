@@ -99,6 +99,7 @@ def _serialize_pretty(root: Element) -> str:
         if root.text and not root.text.isspace():
             rendered.append(root.text)
         for child in root:
+            tail = child.tail
             child.tail = None
             indent(child, space="  ")
             rendered.append(
@@ -112,6 +113,8 @@ def _serialize_pretty(root: Element) -> str:
                     strip_whitespace=False,
                 )
             )
+            if tail and not tail.isspace():
+                rendered.append(tail)
         return "".join(rendered) + "\n"
 
     indent(root, space="  ")

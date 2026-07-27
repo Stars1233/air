@@ -103,6 +103,18 @@ def test_pretty_format_html_all_parameter_combinations(*, with_body: bool, with_
     assert result == expected
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "<span>a</span> between <span>b</span>",
+        "<b>a</b>, <i>b</i>!",
+        "prefix <span>a</span> suffix",
+    ],
+)
+def test_pretty_format_html_preserves_top_level_text(source: str) -> None:
+    assert pretty_format_html(source) == f"{source}\n"
+
+
 # -----------------------------
 # Edge case: empty input raises
 # -----------------------------
