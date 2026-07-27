@@ -86,7 +86,7 @@ def _format_attribute_instantiation(attr_name: str, attr_value: AttributeType, p
     Returns:
         The formatted keyword argument string.
     """
-    if attr_name.isidentifier() and not iskeyword(attr_name):
+    if attr_name.isascii() and attr_name.isidentifier() and not iskeyword(attr_name):
         return f"{padding}{attr_name}={attr_value!r}"
     return f"{padding}**{{{attr_name!r}: {attr_value!r}}}"
 

@@ -501,12 +501,36 @@ def test_from_html_uses_ascii_case_folding_for_attribute_names() -> None:
     assert air.Tag.from_html(source).render() == source
 
 
+def test_from_html_preserves_kelvin_sign_in_attribute_names() -> None:
+    source = '<div data-\u212a data-k=""></div>'
+
+    assert air.Tag.from_html(source).render() == source
+
+
+def test_from_html_to_source_preserves_non_ascii_attribute_names() -> None:
+    source = '<div data-\u017f data-s=""></div>'
+
+    generated_source = air.Tag.from_html_to_source(source)
+    reconstructed = eval(compile(generated_source, "<generated>", "eval"), {"air": air})
+
+    assert reconstructed.render() == source
+
+
 def test_from_html_preserves_valueless_attributes_after_foster_parenting() -> None:
     source = "<html><head></head><body><table><div data-x></div></table></body></html>"
 
     rendered = air.Tag.from_html(source).render()
 
     assert "<div data-x></div><table>" in rendered
+    assert 'data-x=""' not in rendered
+
+
+def test_from_html_does_not_match_attributes_to_synthesized_elements() -> None:
+    source = "<table><tr><td></td></tr><tbody data-x></tbody></table>"
+
+    rendered = air.Tag.from_html(source).render()
+
+    assert "<tbody><tr><td></td></tr></tbody><tbody data-x></tbody>" in rendered
     assert 'data-x=""' not in rendered
 
 

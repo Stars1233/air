@@ -5,21 +5,18 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from html import escape
-from html.parser import HTMLParser as StandardHTMLParser
 from io import StringIO
-from string import ascii_lowercase, ascii_uppercase
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, cast, override
 from xml.etree.ElementTree import Comment, Element, ParseError, TreeBuilder, XMLParser, indent, iterparse
 
-import tinyhtml5
-from tinyhtml5.parser import HTMLParser
+from tinyhtml5.parser import HTMLParser, ReparseError
+from tinyhtml5.tokenizer import HTMLTokenizer
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
 _DOCUMENT_FRAGMENT = "DOCUMENT_FRAGMENT"
 _HTML_WHITESPACE = r"[ \t\n\f\r]"
-_ASCII_LOWERCASE_TRANSLATION = str.maketrans(ascii_uppercase, ascii_lowercase)
 _DOCTYPE_RE = re.compile(
     rf"^{_HTML_WHITESPACE}*(?:<!--.*?-->{_HTML_WHITESPACE}*)*"
     rf"(<!doctype{_HTML_WHITESPACE}+html(?={_HTML_WHITESPACE}|>)[^>]*>)",
@@ -87,21 +84,59 @@ class _ValuelessAttribute(str):  # noqa: FURB189
 _VALUELESS_ATTRIBUTE = _ValuelessAttribute()
 
 
-class _ValuelessAttributeParser(StandardHTMLParser):
-    """Collect source start tags and their valueless attributes."""
+class _ValuelessHTMLTokenizer(HTMLTokenizer):
+    """Retain whether an attribute was written without an equals sign."""
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.elements: list[tuple[str, frozenset[str]]] = []
+    def before_attribute_name_state(self) -> bool:
+        """Mark attributes created by the base tokenizer as valueless."""
+        attribute_count = len(self._current_attribute_data())
+        result = super().before_attribute_name_state()
+        self._mark_new_attribute(attribute_count)
+        return result
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        """Record a start tag and attributes that have no value."""
-        valueless = frozenset(_ascii_lower(name) for name, value in attrs if value is None)
-        self.elements.append((_ascii_lower(tag), valueless))
+    def after_attribute_name_state(self) -> bool:
+        """Mark adjacent attributes created by the base tokenizer as valueless."""
+        attribute_count = len(self._current_attribute_data())
+        result = super().after_attribute_name_state()
+        self._mark_new_attribute(attribute_count)
+        return result
 
-    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        """Record a self-closing start tag."""
-        self.handle_starttag(tag, attrs)
+    def before_attribute_value_state(self) -> bool:
+        """Replace the valueless marker after the tokenizer reads an equals sign."""
+        self._current_attribute_data()[-1][1] = ""
+        return super().before_attribute_value_state()
+
+    def _current_attribute_data(self) -> list[list[Any]]:
+        token = cast("dict[str, Any]", self.current_token)
+        return cast("list[list[Any]]", token["data"])
+
+    def _mark_new_attribute(self, previous_count: int) -> None:
+        token = cast("dict[str, Any]", self.current_token)
+        data = token["data"]
+        if isinstance(data, list) and len(data) > previous_count:
+            data[-1][1] = _VALUELESS_ATTRIBUTE
+
+
+class _ValuelessHTMLParser(HTMLParser):
+    """Use the HTML5 parser with valueless-attribute-aware tokens."""
+
+    @override
+    def _parse(
+        self,
+        stream: str,
+        container: str | None = None,
+        scripting: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        self.container = container
+        self.scripting = scripting
+        self.tokenizer = _ValuelessHTMLTokenizer(stream, parser=self, **kwargs)
+        self.reset()
+        try:
+            self.main_loop()
+        except ReparseError:
+            self.reset()
+            self.main_loop()
 
 
 def parse_html(source: str, *, document: bool) -> Element:
@@ -116,9 +151,10 @@ def parse_html(source: str, *, document: bool) -> Element:
     match = _FIRST_TAG_RE.match(source) if not document else None
     if match and match.group(1).lower() in _SVG_FRAGMENT_ROOTS:
         return _parse_svg_fragment(source, root_name=match.group(1).lower())
+    parser = _ValuelessHTMLParser(namespace_html_elements=False)
     if document:
-        return cast("Element", tinyhtml5.parse(source, namespace_html_elements=False))
-    return _parse_fragment(source)
+        return cast("Element", parser.parse(source))
+    return cast("Element", parser.parse_fragment(source))
 
 
 def has_html_document_root(source: str) -> bool:
@@ -246,6 +282,8 @@ def _serialize_attribute(
 ) -> str:
     """Serialize one attribute with conservative compact-mode quote omission."""
     name = _serialize_attribute_name(name, namespace_prefixes=namespace_prefixes)
+    if is_valueless_attribute(value):
+        return f" {name}"
     if compact and not value:
         return f" {name}"
     quote = "'" if '"' in value and "'" not in value else '"'
@@ -288,7 +326,7 @@ def _collapse_whitespace(node: Element, *, preserve: bool = False) -> None:
 
 def _parse_fragment(source: str) -> Element:
     """Parse an HTML5 fragment using tinyhtml5's fragment-capable parser."""
-    parser = HTMLParser(namespace_html_elements=False)
+    parser = _ValuelessHTMLParser(namespace_html_elements=False)
     return cast("Element", parser.parse_fragment(source))
 
 
@@ -345,60 +383,9 @@ def qualified_element_name(tag: Any, *, namespace_prefixes: dict[str, str]) -> s
     return name
 
 
-def mark_valueless_attributes(root: Element, *, source: str) -> None:
-    """Restore the distinction between valueless and explicitly empty attributes."""
-    parser = _ValuelessAttributeParser()
-    parser.feed(source)
-    parser.close()
-    elements = list(_iter_elements_with_namespaces(root))
-    matched_indices: set[int] = set()
-    for source_name, valueless_attributes in parser.elements:
-        match_index = next(
-            (
-                index
-                for index, element in enumerate(elements)
-                if index not in matched_indices
-                and _ascii_lower(
-                    qualified_element_name(
-                        element[0].tag,
-                        namespace_prefixes=element[1],
-                    )
-                )
-                == source_name
-            ),
-            None,
-        )
-        if match_index is None:
-            continue
-        node, namespace_prefixes = elements[match_index]
-        for name in node.attrib:
-            qualified_name = qualified_attribute_name(name, namespace_prefixes=namespace_prefixes)
-            if _ascii_lower(qualified_name) in valueless_attributes:
-                node.attrib[name] = _VALUELESS_ATTRIBUTE
-        matched_indices.add(match_index)
-
-
 def is_valueless_attribute(value: Any) -> bool:
     """Return whether an attribute value represents omitted source syntax."""
     return isinstance(value, _ValuelessAttribute)
-
-
-def _ascii_lower(value: str) -> str:
-    """Lowercase ASCII letters without folding distinct Unicode characters."""
-    return value.translate(_ASCII_LOWERCASE_TRANSLATION)
-
-
-def _iter_elements_with_namespaces(
-    node: Element,
-    *,
-    inherited: dict[str, str] | None = None,
-) -> Iterator[tuple[Element, dict[str, str]]]:
-    namespace_prefixes = namespace_prefixes_for_node(node, inherited=inherited)
-    if isinstance(node.tag, str) and local_name(node.tag) != _DOCUMENT_FRAGMENT:
-        yield node, namespace_prefixes
-    for child in node:
-        if isinstance(child.tag, str):
-            yield from _iter_elements_with_namespaces(child, inherited=namespace_prefixes)
 
 
 def _is_html_void_element(tag: Any, *, name: str) -> bool:
