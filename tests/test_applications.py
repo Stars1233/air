@@ -1,3 +1,7 @@
+import sys
+from collections.abc import Callable
+
+import anyio.to_thread
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.routing import APIRouter
@@ -190,6 +194,142 @@ def test_default_500_exception_handler() -> None:
         b"<title>500 Internal Server Error</title></head><body><main><h1>500 Internal Server Error</h1>"
         b"<p>An internal server error occurred.</p></main></body></html>"
     )
+
+
+@pytest.fixture
+def emscripten_without_threadpool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Model workerd's Emscripten runtime and fail if Starlette starts a thread."""
+    monkeypatch.setattr(sys, "platform", "emscripten")
+
+    async def unavailable(*args: object, **kwargs: object) -> None:
+        msg = "can't start new thread"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(anyio.to_thread, "run_sync", unavailable)
+
+
+def test_air_404_response_without_threads(emscripten_without_threadpool: None) -> None:
+    """An unknown route uses Air's normal 404 response on Emscripten."""
+    response = TestClient(air.Air()).get("/missing")
+
+    assert response.status_code == 404
+    assert "<h1>404 Not Found</h1>" in response.text
+    assert "URL: http://testserver/missing" in response.text
+
+
+def test_http_exception_404_without_threads(emscripten_without_threadpool: None) -> None:
+    """An explicit HTTPException(404) uses Air's handler on Emscripten."""
+    app = air.Air()
+
+    @app.get("/explicit-404")
+    async def explicit_404() -> None:
+        raise air.HTTPException(status_code=404)
+
+    response = TestClient(app).get("/explicit-404")
+
+    assert response.status_code == 404
+    assert "<h1>404 Not Found</h1>" in response.text
+
+
+def test_air_500_response_without_threads(emscripten_without_threadpool: None) -> None:
+    """An unhandled exception uses Air's normal 500 response on Emscripten."""
+    app = air.Air()
+
+    @app.get("/error")
+    async def error() -> None:
+        msg = "boom"
+        raise RuntimeError(msg)
+
+    response = TestClient(app, raise_server_exceptions=False).get("/error")
+
+    assert response.status_code == 500
+    assert "<h1>500 Internal Server Error</h1>" in response.text
+
+
+def test_custom_sync_exception_handler_without_threads(emscripten_without_threadpool: None) -> None:
+    """A custom synchronous handler is adapted for Emscripten."""
+
+    class CustomError(Exception):
+        pass
+
+    app = air.Air()
+
+    @app.exception_handler(CustomError)
+    def custom_handler(_: air.Request, exc: Exception) -> air.responses.PlainTextResponse:
+        return air.responses.PlainTextResponse(f"handled: {exc}")
+
+    @app.get("/custom-error")
+    async def custom_error() -> None:
+        msg = "custom"
+        raise CustomError(msg)
+
+    response = TestClient(app).get("/custom-error")
+
+    assert response.status_code == 200
+    assert response.text == "handled: custom"
+    assert app.exception_handlers[CustomError] is not custom_handler
+
+
+def test_custom_async_exception_handler_without_threads(emscripten_without_threadpool: None) -> None:
+    """A custom asynchronous handler remains asynchronous on Emscripten."""
+
+    class CustomError(Exception):
+        pass
+
+    app = air.Air()
+
+    @app.exception_handler(CustomError)
+    async def custom_handler(_: air.Request, exc: Exception) -> air.responses.PlainTextResponse:
+        return air.responses.PlainTextResponse(f"handled async: {exc}")
+
+    @app.get("/custom-error")
+    async def custom_error() -> None:
+        msg = "custom"
+        raise CustomError(msg)
+
+    response = TestClient(app).get("/custom-error")
+
+    assert response.status_code == 200
+    assert response.text == "handled async: custom"
+    assert app.exception_handlers[CustomError] is custom_handler
+
+
+def test_native_sync_exception_handler_uses_threadpool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Native runtimes retain Starlette's threadpool dispatch for sync handlers."""
+
+    class CustomError(Exception):
+        pass
+
+    calls: list[Callable[..., object]] = []
+    run_sync = anyio.to_thread.run_sync
+
+    async def track_threadpool(
+        func: Callable[..., object],
+        *args: object,
+        **kwargs: object,
+    ) -> object:
+        calls.append(func)
+        return await run_sync(func, *args, **kwargs)
+
+    monkeypatch.setattr(anyio.to_thread, "run_sync", track_threadpool)
+
+    app = air.Air()
+
+    @app.exception_handler(CustomError)
+    def custom_handler(_: air.Request, exc: Exception) -> air.responses.PlainTextResponse:
+        return air.responses.PlainTextResponse(f"native: {exc}")
+
+    @app.get("/custom-error")
+    async def custom_error() -> None:
+        msg = "custom"
+        raise CustomError(msg)
+
+    response = TestClient(app).get("/custom-error")
+
+    assert response.status_code == 200
+    assert response.text == "native: custom"
+    assert app.exception_handlers[CustomError] is custom_handler
+    assert len(calls) == 1
 
 
 def test_injection_of_default_exception_handlers() -> None:

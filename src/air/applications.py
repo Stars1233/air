@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 from warnings import deprecated
 
 from fastapi import FastAPI, routing
@@ -16,10 +16,15 @@ from fastapi.utils import generate_unique_id
 from starlette.middleware import Middleware
 from starlette.responses import Response
 from starlette.routing import BaseRoute
-from starlette.types import Lifespan, Receive, Scope, Send
+from starlette.types import ExceptionHandler, HTTPExceptionHandler, Lifespan, Receive, Scope, Send
 from typing_extensions import Doc
 
-from .exception_handlers import DEFAULT_EXCEPTION_HANDLERS, ExceptionHandlersType
+from .exception_handlers import (
+    DEFAULT_EXCEPTION_HANDLERS,
+    ExceptionHandlersType,
+    adapt_exception_handler,
+    adapt_exception_handlers,
+)
 from .responses import AirResponse
 from .routing import AirRoute, AirRouter, RouterMixin
 
@@ -294,6 +299,7 @@ class Air(RouterMixin):
         if exception_handlers is None:
             exception_handlers = {}
         exception_handlers = DEFAULT_EXCEPTION_HANDLERS | exception_handlers
+        exception_handlers = adapt_exception_handlers(exception_handlers)
 
         # Auto-detect database: DATABASE_URL env var + asyncpg installed
         self.db = None
@@ -343,6 +349,12 @@ class Air(RouterMixin):
             for code, handler in exception_handlers.items():
                 if code not in self._app.exception_handlers:
                     self._app.exception_handlers[code] = handler
+            self._app.exception_handlers.update(
+                cast(
+                    "Any",
+                    adapt_exception_handlers(cast("Any", self._app.exception_handlers)),
+                )
+            )
 
         # Use Air's custom route class
         self._app.router.route_class = AirRoute
@@ -491,16 +503,25 @@ class Air(RouterMixin):
             generate_unique_id_function=generate_unique_id_function,
         )
 
-    def exception_handler(
+    def exception_handler[Handler: Callable[..., Any]](
         self,
         exc_class_or_status_code: int | type[Exception],
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    ) -> Callable[[Handler], Handler]:
         """Add an exception handler to the application.
 
         Returns:
             A decorator that registers the exception handler.
         """
-        return self._app.exception_handler(exc_class_or_status_code)
+
+        def decorator(handler: Handler) -> Handler:
+            adapted_handler = adapt_exception_handler(cast("HTTPExceptionHandler", handler))
+            self._app.add_exception_handler(
+                exc_class_or_status_code,
+                cast("ExceptionHandler", adapted_handler),
+            )
+            return handler
+
+        return decorator
 
     def middleware(self, middleware_type: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Add a middleware function using a decorator.

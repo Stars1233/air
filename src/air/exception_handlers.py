@@ -1,13 +1,19 @@
-from collections.abc import Callable
-from typing import Final
+import sys
+from functools import wraps
+from inspect import iscoroutinefunction
+from typing import TYPE_CHECKING, Final, cast
 
 from starlette.requests import Request
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.responses import Response
+from starlette.types import ASGIApp, HTTPExceptionHandler, Receive, Scope, Send
 
 from .exceptions import HTTPException
 from .layouts import mvpcss
 from .responses import AirResponse
 from .tags import H1, P, Title
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def default_404_router_handler(router_name: str) -> ASGIApp:
@@ -106,7 +112,36 @@ def default_500_exception_handler(request: Request, exc: Exception) -> AirRespon
     )
 
 
-type ExceptionHandlersType = dict[int, Callable[[Request, Exception], AirResponse]]
+def _threads_available() -> bool:
+    """Return whether exception handlers can be dispatched to worker threads."""
+    return sys.platform != "emscripten"
+
+
+def adapt_exception_handler(handler: HTTPExceptionHandler) -> HTTPExceptionHandler:
+    """Wrap a synchronous handler for runtimes without worker threads."""
+    if _threads_available() or iscoroutinefunction(handler) or iscoroutinefunction(handler.__call__):
+        return handler
+
+    sync_handler = cast("Callable[[Request, Exception], Response]", handler)
+
+    @wraps(sync_handler)
+    async def async_handler(request: Request, exc: Exception) -> Response:
+        return sync_handler(request, exc)
+
+    return async_handler
+
+
+def adapt_exception_handlers[Key](
+    handlers: dict[Key, HTTPExceptionHandler],
+) -> dict[Key, HTTPExceptionHandler]:
+    """Adapt each handler without capturing a loop variable in its wrapper."""
+    return {
+        key: adapt_exception_handler(handler)
+        for key, handler in handlers.items()
+    }
+
+
+type ExceptionHandlersType = dict[int | type[Exception], HTTPExceptionHandler]
 DEFAULT_EXCEPTION_HANDLERS: Final[ExceptionHandlersType] = {
     404: default_404_exception_handler,
     500: default_500_exception_handler,
