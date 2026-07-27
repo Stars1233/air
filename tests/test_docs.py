@@ -13,6 +13,8 @@ def test_documentation_builds(tmp_path: Path) -> None:
     subprocess.run(
         [
             sys.executable,
+            "-X",
+            "utf8",
             "-m",
             "mkdocs",
             "build",
