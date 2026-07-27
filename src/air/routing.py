@@ -2,7 +2,8 @@
 
 import inspect
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
+from contextlib import AbstractContextManager, asynccontextmanager
 from enum import Enum
 from functools import wraps
 from types import FunctionType
@@ -13,12 +14,14 @@ from typing import (
     Protocol,
     TypedDict,
     Unpack,
+    cast,
     get_type_hints,
     override,
 )
 from urllib.parse import urlencode
 from warnings import deprecated as warnings_deprecated
 
+import fastapi.dependencies.utils as fastapi_dependency_utils
 import fastapi.encoders
 from fastapi import params
 from fastapi.params import Depends
@@ -47,6 +50,34 @@ fastapi.encoders.encoders_by_class_tuples = fastapi.encoders.generate_encoders_b
 def _threads_available() -> bool:
     """Return whether synchronous handlers can be dispatched to worker threads."""
     return sys.platform != "emscripten"
+
+
+async def _run_sync_directly[**P, T](func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
+    """Call a synchronous dependency directly when worker threads are unavailable."""
+    return func(*args, **kwargs)
+
+
+@asynccontextmanager
+async def _enter_sync_context_directly[T](context_manager: AbstractContextManager[T]) -> AsyncIterator[T]:
+    """Enter a synchronous generator dependency without a worker thread.
+
+    Yields:
+        The value yielded by the dependency's context manager.
+    """
+    with context_manager as value:
+        yield value
+
+
+def _configure_threadless_dependency_dispatch() -> None:
+    """Keep FastAPI's synchronous dependencies on the event loop in WebAssembly."""
+    if _threads_available():
+        return
+    dependency_utils = cast("Any", fastapi_dependency_utils)
+    dependency_utils.run_in_threadpool = _run_sync_directly
+    dependency_utils.contextmanager_in_threadpool = _enter_sync_context_directly
+
+
+_configure_threadless_dependency_dispatch()
 
 
 def _to_response(

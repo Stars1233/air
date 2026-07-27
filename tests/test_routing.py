@@ -1,6 +1,8 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterator
 from contextlib import asynccontextmanager
+from typing import Annotated
 
+import fastapi.dependencies.utils as fastapi_dependency_utils
 import pytest
 from fastapi import Depends
 from fastapi.testclient import TestClient
@@ -548,6 +550,54 @@ def test_air_router_missing_sync_return_without_threads(monkeypatch: pytest.Monk
         match="Air endpoint returned None; did you forget a return statement",
     ):
         TestClient(app).get("/sync")
+
+
+def test_air_router_sync_dependencies_without_threads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WebAssembly runtimes execute regular and generator dependencies without threads."""
+    import asyncio  # noqa: PLC0415
+
+    monkeypatch.setattr(routing, "_threads_available", lambda: False)
+    monkeypatch.setattr(
+        fastapi_dependency_utils,
+        "run_in_threadpool",
+        fastapi_dependency_utils.run_in_threadpool,
+    )
+    monkeypatch.setattr(
+        fastapi_dependency_utils,
+        "contextmanager_in_threadpool",
+        fastapi_dependency_utils.contextmanager_in_threadpool,
+    )
+    routing._configure_threadless_dependency_dispatch()
+
+    dependency_loops: list[bool] = []
+    generator_events: list[str] = []
+
+    def sync_dependency() -> str:
+        dependency_loops.append(asyncio.get_running_loop().is_running())
+        return "dependency"
+
+    def sync_generator_dependency() -> Iterator[str]:
+        generator_events.append("enter")
+        yield "resource"
+        generator_events.append("exit")
+
+    app = air.Air()
+
+    @app.get("/sync-dependencies")
+    def sync_page(
+        dependency: Annotated[str, Depends(sync_dependency)],
+        resource: Annotated[str, Depends(sync_generator_dependency)],
+        *,
+        is_htmx: bool = air.is_htmx_request,
+    ) -> air.P:
+        return air.P(f"{dependency}:{resource}:{is_htmx}")
+
+    response = TestClient(app).get("/sync-dependencies", headers={"HX-Request": "true"})
+
+    assert response.status_code == 200
+    assert response.text == "<p>dependency:resource:True</p>"
+    assert dependency_loops == [True]
+    assert generator_events == ["enter", "exit"]
 
 
 def test_air_router_default_404_handler() -> None:
