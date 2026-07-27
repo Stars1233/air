@@ -102,7 +102,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.22" },
     { name = "rich", marker = "sys_platform != 'emscripten'", specifier = ">=14.3.2" },
     { name = "staticware", specifier = ">=0.2.0" },
-    { name = "tinyhtml5", specifier = ">=2.1.0" },
+    { name = "tinyhtml5", specifier = ">=2.1.0,<3" },
     { name = "typer", marker = "sys_platform != 'emscripten'", specifier = ">=0.23.0" },
     { name = "uvicorn", marker = "sys_platform != 'emscripten'", specifier = ">=0.40.0" },
 ]

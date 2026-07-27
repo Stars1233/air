@@ -89,7 +89,7 @@ dependencies = [
     "python-multipart>=0.0.22", # https://pypi.org/project/python-multipart
     "rich>=14.3.2; platform_system != 'Emscripten'", # https://pypi.org/project/rich
     "staticware>=0.2.0", # https://pypi.org/project/staticware
-    "tinyhtml5>=2.1.0", # https://pypi.org/project/tinyhtml5
+    "tinyhtml5>=2.1.0,<3", # https://pypi.org/project/tinyhtml5
     "typer>=0.23.0; platform_system != 'Emscripten'", # https://pypi.org/project/typer
     "uvicorn>=0.40.0; platform_system != 'Emscripten'", # https://pypi.org/project/uvicorn
 ]
