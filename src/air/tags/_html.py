@@ -16,46 +16,42 @@ if TYPE_CHECKING:
 
 _DOCUMENT_FRAGMENT = "DOCUMENT_FRAGMENT"
 _FIRST_TAG_RE = re.compile(r"^\s*(?:<!doctype\s+html\b[^>]*>\s*)?<([a-z][a-z0-9:-]*)\b", re.IGNORECASE)
-_PRESERVE_WHITESPACE_ELEMENTS = frozenset(
-    {
-        "iframe",
-        "noembed",
-        "noframes",
-        "noscript",
-        "plaintext",
-        "pre",
-        "script",
-        "style",
-        "textarea",
-        "xmp",
-    }
-)
+_PRESERVE_WHITESPACE_ELEMENTS = frozenset({
+    "iframe",
+    "noembed",
+    "noframes",
+    "noscript",
+    "plaintext",
+    "pre",
+    "script",
+    "style",
+    "textarea",
+    "xmp",
+})
 _RAW_TEXT_ELEMENTS = frozenset({"iframe", "noembed", "noframes", "noscript", "plaintext", "script", "style", "xmp"})
 _SVG_FRAGMENT_ROOTS = frozenset({"image", "svg"})
 _SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 _UNQUOTED_ATTRIBUTE_RE = re.compile(r"[A-Za-z0-9._:/@+?#%&,;~-]+")
-_VOID_ELEMENTS = frozenset(
-    {
-        "area",
-        "base",
-        "basefont",
-        "bgsound",
-        "br",
-        "col",
-        "embed",
-        "frame",
-        "hr",
-        "img",
-        "input",
-        "keygen",
-        "link",
-        "meta",
-        "param",
-        "source",
-        "track",
-        "wbr",
-    }
-)
+_VOID_ELEMENTS = frozenset({
+    "area",
+    "base",
+    "basefont",
+    "bgsound",
+    "br",
+    "col",
+    "embed",
+    "frame",
+    "hr",
+    "img",
+    "input",
+    "keygen",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+})
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
