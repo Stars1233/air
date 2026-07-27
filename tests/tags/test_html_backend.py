@@ -23,6 +23,18 @@ def test_compact_html_removes_comments_without_losing_tails() -> None:
     assert "</span> d" in result
 
 
+def test_compact_html_preserves_document_doctype() -> None:
+    source = "<!doctype html><html><body><p>x</p></body></html>"
+
+    assert compact_html(source, document=True).startswith("<!doctype html><html>")
+
+
+def test_compact_html_preserves_nonbreaking_space() -> None:
+    source = "<p>a&nbsp;b</p>"
+
+    assert compact_html(source, document=False) == "<p>a\u00a0b</p>"
+
+
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
@@ -49,6 +61,24 @@ def test_svg_names_are_normalized() -> None:
 
     assert local_name(root.tag) == "svg"
     assert local_name(root[0].tag) == "lineargradient"
+
+
+def test_svg_fragment_preserves_comments() -> None:
+    root = parse_html("<svg><!--keep--><circle/></svg>", document=False)
+
+    assert serialize_html(root) == "<svg><!--keep--><circle></circle></svg>"
+
+
+def test_svg_fragment_preserves_namespaced_attributes() -> None:
+    source = (
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="#x"/></svg>'
+    )
+
+    assert serialize_html(parse_html(source, document=False)) == (
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="#x"></use></svg>'
+    )
 
 
 def test_html5_parser_inserts_table_body() -> None:

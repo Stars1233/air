@@ -6,7 +6,7 @@ import re
 from copy import deepcopy
 from html import escape
 from typing import TYPE_CHECKING, Any, cast
-from xml.etree.ElementTree import Comment, Element, ParseError, fromstring, indent
+from xml.etree.ElementTree import Comment, Element, ParseError, TreeBuilder, XMLParser, fromstring, indent
 
 import tinyhtml5
 from tinyhtml5.parser import HTMLParser
@@ -15,7 +15,15 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 _DOCUMENT_FRAGMENT = "DOCUMENT_FRAGMENT"
+_DOCTYPE_RE = re.compile(
+    r"^\s*(?:<!--.*?-->\s*)*(<!doctype\b[^>]*>)",
+    re.IGNORECASE | re.DOTALL,
+)
 _FIRST_TAG_RE = re.compile(r"^\s*(?:<!doctype\s+html\b[^>]*>\s*)?<([a-z][a-z0-9:-]*)\b", re.IGNORECASE)
+_HTML_DOCUMENT_RE = re.compile(
+    r"^\s*(?:<!--.*?-->\s*)*(?:<!doctype\s+html\b[^>]*>\s*)?(?:<!--.*?-->\s*)*<html\b",
+    re.IGNORECASE | re.DOTALL,
+)
 _PRESERVE_WHITESPACE_ELEMENTS = frozenset({
     "iframe",
     "noembed",
@@ -31,6 +39,10 @@ _PRESERVE_WHITESPACE_ELEMENTS = frozenset({
 _RAW_TEXT_ELEMENTS = frozenset({"iframe", "noembed", "noframes", "noscript", "plaintext", "script", "style", "xmp"})
 _SVG_FRAGMENT_ROOTS = frozenset({"image", "svg"})
 _SVG_NAMESPACE = "http://www.w3.org/2000/svg"
+_XLINK_NAMESPACE = "http://www.w3.org/1999/xlink"
+_XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace"
+_XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/"
+_XMLNS_RE = re.compile(r"""\bxmlns(?::([A-Za-z_][\w.-]*))?\s*=\s*(['"])(.*?)\2""", re.DOTALL)
 _UNQUOTED_ATTRIBUTE_RE = re.compile(r"[A-Za-z0-9._:/@+?#%&,;~-]+")
 _VOID_ELEMENTS = frozenset({
     "area",
@@ -52,7 +64,7 @@ _VOID_ELEMENTS = frozenset({
     "track",
     "wbr",
 })
-_WHITESPACE_RE = re.compile(r"\s+")
+_WHITESPACE_RE = re.compile(r"[ \t\n\f\r]+")
 
 
 def parse_html(source: str, *, document: bool) -> Element:
@@ -72,6 +84,11 @@ def parse_html(source: str, *, document: bool) -> Element:
     return _parse_fragment(source)
 
 
+def has_html_document_root(source: str) -> bool:
+    """Return whether source starts with an HTML document root."""
+    return bool(_HTML_DOCUMENT_RE.match(source))
+
+
 def serialize_html(
     root: Element,
     *,
@@ -83,14 +100,19 @@ def serialize_html(
     if compact:
         _remove_comments(root)
         _collapse_whitespace(root)
+    namespace_prefixes = _namespace_prefixes(root)
     if pretty:
-        return _serialize_pretty(root)
-    return _serialize_root(root, compact=compact)
+        return _serialize_pretty(root, namespace_prefixes=namespace_prefixes)
+    return _serialize_root(root, compact=compact, namespace_prefixes=namespace_prefixes)
 
 
 def compact_html(source: str, *, document: bool) -> str:
     """Parse and compact HTML while preserving HTML5 semantics."""
-    return serialize_html(parse_html(source, document=document), compact=True)
+    rendered = serialize_html(parse_html(source, document=document), compact=True)
+    doctype_match = _DOCTYPE_RE.match(source) if document else None
+    if doctype_match:
+        return doctype_match.group(1) + rendered
+    return rendered
 
 
 def is_comment(node: Element) -> bool:
@@ -115,7 +137,7 @@ def iter_content(node: Element) -> Iterator[Element | str]:
             yield child.tail
 
 
-def _serialize_pretty(root: Element) -> str:
+def _serialize_pretty(root: Element, *, namespace_prefixes: dict[str, str]) -> str:
     if local_name(root.tag) == _DOCUMENT_FRAGMENT:
         rendered: list[str] = []
         if root.text and not root.text.isspace():
@@ -124,44 +146,69 @@ def _serialize_pretty(root: Element) -> str:
             tail = child.tail
             child.tail = None
             indent(child, space="  ")
-            rendered.append(_serialize_node(child))
+            rendered.append(_serialize_node(child, namespace_prefixes=namespace_prefixes))
             if tail and not tail.isspace():
                 rendered.append(tail)
         return "".join(rendered) + "\n"
 
     indent(root, space="  ")
-    return _serialize_node(root) + "\n"
+    return _serialize_node(root, namespace_prefixes=namespace_prefixes) + "\n"
 
 
-def _serialize_root(root: Element, *, compact: bool) -> str:
+def _serialize_root(root: Element, *, compact: bool, namespace_prefixes: dict[str, str]) -> str:
     """Serialize a document element or synthetic fragment root."""
     if local_name(root.tag) != _DOCUMENT_FRAGMENT:
-        return _serialize_node(root, compact=compact)
+        return _serialize_node(root, compact=compact, namespace_prefixes=namespace_prefixes)
     rendered = [_serialize_text(root.text)]
     for child in root:
-        rendered.extend((_serialize_node(child, compact=compact), _serialize_text(child.tail)))
+        rendered.extend((
+            _serialize_node(child, compact=compact, namespace_prefixes=namespace_prefixes),
+            _serialize_text(child.tail),
+        ))
     return "".join(rendered)
 
 
-def _serialize_node(node: Element, *, compact: bool = False) -> str:
+def _serialize_node(
+    node: Element,
+    *,
+    compact: bool = False,
+    namespace_prefixes: dict[str, str],
+) -> str:
     """Serialize one element and its descendants as HTML."""
     if is_comment(node):
         return f"<!--{node.text or ''}-->"
     name = local_name(node.tag)
-    attributes = "".join(_serialize_attribute(key, value, compact=compact) for key, value in node.attrib.items())
+    attributes = "".join(
+        _serialize_attribute(
+            key,
+            value,
+            compact=compact,
+            namespace_prefixes=namespace_prefixes,
+        )
+        for key, value in node.attrib.items()
+    )
     opening = f"<{name}{attributes}>"
     if name in _VOID_ELEMENTS:
         return opening
     rendered = [opening, _serialize_text(node.text, parent=name)]
     for child in node:
-        rendered.extend((_serialize_node(child, compact=compact), _serialize_text(child.tail, parent=name)))
+        rendered.extend((
+            _serialize_node(child, compact=compact, namespace_prefixes=namespace_prefixes),
+            _serialize_text(child.tail, parent=name),
+        ))
     rendered.append(f"</{name}>")
     return "".join(rendered)
 
 
-def _serialize_attribute(name: str, value: str, *, compact: bool) -> str:
+def _serialize_attribute(
+    name: str,
+    value: str,
+    *,
+    compact: bool,
+    namespace_prefixes: dict[str, str],
+) -> str:
     """Serialize one attribute with conservative compact-mode quote omission."""
-    name = local_name(name)
+    name = _serialize_attribute_name(name, namespace_prefixes=namespace_prefixes)
     if compact and not value:
         return f" {name}"
     quote = "'" if '"' in value and "'" not in value else '"'
@@ -170,6 +217,16 @@ def _serialize_attribute(name: str, value: str, *, compact: bool) -> str:
     if compact and _UNQUOTED_ATTRIBUTE_RE.fullmatch(escaped):
         return f" {name}={escaped}"
     return f" {name}={quote}{escaped}{quote}"
+
+
+def _serialize_attribute_name(name: str, *, namespace_prefixes: dict[str, str]) -> str:
+    """Return an attribute name while retaining a known XML namespace prefix."""
+    if not name.startswith("{"):
+        return name
+    namespace, _, unqualified_name = name[1:].partition("}")
+    if prefix := namespace_prefixes.get(namespace):
+        return f"{prefix}:{unqualified_name}"
+    return unqualified_name
 
 
 def _serialize_text(value: str | None, *, parent: str = "") -> str:
@@ -211,29 +268,59 @@ def _remove_comments(node: Element) -> None:
             _remove_comments(child)
 
 
+def _namespace_prefixes(root: Element) -> dict[str, str]:
+    """Collect namespace prefixes needed to serialize qualified attributes."""
+    prefixes = {
+        _XLINK_NAMESPACE: "xlink",
+        _XML_NAMESPACE: "xml",
+        _XMLNS_NAMESPACE: "xmlns",
+    }
+    for node in root.iter():
+        for name, value in node.attrib.items():
+            if name.startswith("xmlns:"):
+                prefixes[value] = name.partition(":")[2]
+            elif name.startswith(f"{{{_XMLNS_NAMESPACE}}}"):
+                prefixes[value] = local_name(name)
+    return prefixes
+
+
 def _parse_svg_fragment(source: str, *, root_name: str) -> Element:
-    xmlns: str | None = None
     try:
         if root_name == "svg":
-            root = fromstring(source)
-            xmlns_match = re.search(r"""\bxmlns\s*=\s*(['"])(.*?)\1""", source, re.IGNORECASE)
-            if xmlns_match:
-                xmlns = xmlns_match.group(2)
+            root = _parse_xml_with_comments(source)
         else:
-            wrapper = fromstring(f'<svg xmlns="{_SVG_NAMESPACE}">{source}</svg>')
+            wrapper = _parse_xml_with_comments(f'<svg xmlns="{_SVG_NAMESPACE}">{source}</svg>')
             root = wrapper[0]
     except ParseError:
         return _parse_fragment(source)
     _lowercase_svg_names(root)
-    if xmlns:
-        root.attrib = {"xmlns": xmlns, **root.attrib}
+    namespace_declarations = {
+        "xmlns" if not prefix else f"xmlns:{prefix}": value
+        for prefix, _, value in _XMLNS_RE.findall(source)
+    }
+    if namespace_declarations:
+        root.attrib = {**namespace_declarations, **root.attrib}
     return root
+
+
+def _parse_xml_with_comments(source: str) -> Element:
+    """Parse XML-compatible SVG while retaining comment nodes."""
+    parser = XMLParser(target=TreeBuilder(insert_comments=True))
+    return fromstring(source, parser=parser)
 
 
 def _lowercase_svg_names(node: Element) -> None:
     if isinstance(node.tag, str):
         namespace = node.tag.partition("}")[0] + "}" if node.tag.startswith("{") else ""
         node.tag = namespace + local_name(node.tag).lower()
-    node.attrib = {local_name(name).lower(): value for name, value in node.attrib.items()}
+    node.attrib = {_lowercase_qualified_name(name): value for name, value in node.attrib.items()}
     for child in node:
         _lowercase_svg_names(child)
+
+
+def _lowercase_qualified_name(name: str) -> str:
+    """Lowercase a local XML name without discarding its namespace URI."""
+    if not name.startswith("{"):
+        return name.lower()
+    namespace, _, unqualified_name = name[1:].partition("}")
+    return f"{{{namespace}}}{unqualified_name.lower()}"

@@ -7,6 +7,7 @@ from air.tags.constants import HTML_DOCTYPE
 
 # Adjust this import path if needed for your project layout.
 from air.tags.utils import (
+    compact_format_html,
     format_html,
     pretty_format_html,
 )
@@ -113,6 +114,55 @@ def test_pretty_format_html_all_parameter_combinations(*, with_body: bool, with_
 )
 def test_pretty_format_html_preserves_top_level_text(source: str) -> None:
     assert pretty_format_html(source) == f"{source}\n"
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("<!doctype html><html></html>", "<html></html>"),
+        ("<!doctype html><html><p>P</p></html>", "<html><body><p>P</p></body></html>"),
+    ],
+)
+def test_format_html_recognizes_documents_without_explicit_sections(source: str, expected: str) -> None:
+    assert format_html(source) == expected
+
+
+def test_compact_format_html_keeps_valid_document_structure() -> None:
+    source = "<!doctype html><html><p>P</p></html>"
+
+    assert compact_format_html(source) == (
+        "<!doctype html><html><head></head><body><p>P</p></body></html>"
+    )
+
+
+def test_compact_format_html_recognizes_comment_between_doctype_and_root() -> None:
+    source = "<!doctype html><!--lead--><html><body><p>P</p></body></html>"
+
+    assert compact_format_html(source) == (
+        "<!doctype html><html><head></head><body><p>P</p></body></html>"
+    )
+
+
+def test_format_html_preserves_generated_head_and_body_content() -> None:
+    source = "<title>T</title><p>P</p>"
+
+    assert format_html(source) == (
+        "<html><head><title>T</title></head><body><p>P</p></body></html>"
+    )
+
+
+def test_format_html_preserves_explicit_head_when_wrapping_body() -> None:
+    source = "<head><title>T</title></head><body><p>P</p></body>"
+
+    assert format_html(source, with_body=True) == (
+        "<html><head><title>T</title></head><body><p>P</p></body></html>"
+    )
+
+
+def test_format_html_recognizes_explicit_head_fragment() -> None:
+    source = "<head><title>T</title></head>"
+
+    assert format_html(source) == "<html><head><title>T</title></head></html>"
 
 
 # -----------------------------

@@ -15,7 +15,7 @@ from urllib.error import URLError
 
 from air.exceptions import BrowserOpenError
 
-from ._html import compact_html, local_name, parse_html, serialize_html
+from ._html import compact_html, has_html_document_root, local_name, parse_html, serialize_html
 from .constants import (
     _LOOKS_LIKE_FULL_HTML_UNICODE_RE,
     _LOOKS_LIKE_HTML_UNICODE_RE,
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from .types import LexerType, StrPath
 
 _HEAD_FRAGMENT_RE = re.compile(
-    r"^\s*<(?:base|link|meta|script|style|title)\b",
+    r"^\s*<(?:base|head|link|meta|script|style|title)\b",
     re.IGNORECASE,
 )
 
@@ -159,7 +159,7 @@ def compact_format_html(source: str) -> str:
     Comments and repeated whitespace are removed, and safe attribute quotes are
     omitted, while preserving HTML5 parsing semantics.
     """
-    return compact_html(source, document=is_full_html_document(source))
+    return compact_html(source, document=has_html_document_root(source))
 
 
 def pretty_format_html(
@@ -208,17 +208,18 @@ def format_html(
     Returns:
         HTML serialized from the parsed element tree.
     """
-    source_is_document = is_full_html_document(source)
+    source_is_document = has_html_document_root(source)
     head_fragment = bool(_HEAD_FRAGMENT_RE.match(source))
     parse_as_document = with_body or source_is_document or head_fragment
     root = parse_html(source, document=parse_as_document)
     if parse_as_document:
         source_has_head = bool(re.search(r"<head\b", source, re.IGNORECASE))
         source_has_body = bool(re.search(r"<body\b", source, re.IGNORECASE))
-        keep_head = with_head if with_body and not source_is_document else source_has_head or head_fragment
-        keep_body = with_body if not source_is_document else source_has_body
         for child in list(root):
             name = local_name(child.tag)
+            has_content = bool(child.attrib or len(child) or (child.text and not child.text.isspace()))
+            keep_head = with_head or source_has_head or has_content
+            keep_body = with_body or source_has_body or has_content
             if (name == "head" and not keep_head) or (name == "body" and not keep_body):
                 root.remove(child)
     rendered = serialize_html(root, pretty=pretty)

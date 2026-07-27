@@ -454,6 +454,14 @@ def test_from_html() -> None:
     assert actual_air_tag.pretty_html == expected_air_tag.pretty_html
 
 
+def test_from_html_recognizes_html_root_without_explicit_sections() -> None:
+    source = "<!doctype html><html><p>P</p></html>"
+
+    assert air.Tag.from_html(source).render() == (
+        "<!doctype html><html><head></head><body><p>P</p></body></html>"
+    )
+
+
 def test_to_source() -> None:
     actual_fragment_air_tag_source = FRAGMENT_AIR_TAG_SAMPLE.to_source()
     expected_fragment_air_tag_source = FRAGMENT_AIR_TAG_SOURCE_SAMPLE

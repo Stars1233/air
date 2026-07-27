@@ -9,7 +9,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar, Self
 from xml.etree.ElementTree import Element
 
-from air.tags._html import is_comment, iter_content, local_name, parse_html
+from air.tags._html import has_html_document_root, is_comment, iter_content, local_name, parse_html
 from air.tags.constants import (
     DEFAULT_INDENTATION_SIZE,
     EMPTY_JOIN_SEPARATOR,
@@ -22,7 +22,6 @@ from air.tags.utils import (
     SafeStr,
     compact_format_html,
     display_pretty_html_in_the_browser,
-    is_full_html_document,
     looks_like_html,
     migrate_attribute_name_to_html,
     open_html_in_the_browser,
@@ -750,7 +749,7 @@ class BaseTag:
         if not looks_like_html(html_source):
             msg = f"{cls.__name__}.from_html(html_source) expects a valid HTML string."
             raise ValueError(msg)
-        is_fragment = not is_full_html_document(html_source)
+        is_fragment = not has_html_document_root(html_source)
         root = parse_html(html_source, document=not is_fragment)
         if is_fragment and local_name(root.tag) == "DOCUMENT_FRAGMENT":
             parsed_nodes = [node for node in iter_content(root) if isinstance(node, Element)]
