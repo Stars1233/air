@@ -35,6 +35,12 @@ def test_compact_html_preserves_nonbreaking_space() -> None:
     assert compact_html(source, document=False) == "<p>a\u00a0b</p>"
 
 
+def test_compact_html_does_not_turn_escaped_noscript_text_into_markup() -> None:
+    source = "<noscript>&lt;/noscript&gt;&lt;script&gt;alert(1)&lt;/script&gt;</noscript>"
+
+    assert compact_html(source, document=False) == source
+
+
 @pytest.mark.parametrize(
     ("source", "expected"),
     [

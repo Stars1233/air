@@ -45,7 +45,7 @@ _PRESERVE_WHITESPACE_ELEMENTS = frozenset({
     "textarea",
     "xmp",
 })
-_RAW_TEXT_ELEMENTS = frozenset({"iframe", "noembed", "noframes", "noscript", "plaintext", "script", "style", "xmp"})
+_RAW_TEXT_ELEMENTS = frozenset({"iframe", "noembed", "noframes", "plaintext", "script", "style", "xmp"})
 _SVG_FRAGMENT_ROOTS = frozenset({"image", "svg"})
 _HTML_NAMESPACE = "http://www.w3.org/1999/xhtml"
 _SVG_NAMESPACE = "http://www.w3.org/2000/svg"
