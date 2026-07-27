@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 from typing import TYPE_CHECKING
 
-from air.tags._html import local_name
+from air.tags._html import local_name, qualified_attribute_name
 from air.tags.constants import AIR_PREFIX, BOOLEAN_HTML_ATTRIBUTES, INDENT_UNIT
 from air.tags.utils import migrate_attribute_name_to_air_tag
 
@@ -81,7 +81,11 @@ def _format_attribute_instantiation(attr_name: str, attr_value: AttributeType, p
     return f"{padding}{attr_name}={attr_value!r}"
 
 
-def _migrate_html_attributes_to_air_tag(node: Element) -> TagAttributesType:
+def _migrate_html_attributes_to_air_tag(
+    node: Element,
+    *,
+    namespace_prefixes: dict[str, str],
+) -> TagAttributesType:
     """Convert parsed HTML attributes to Air tag attribute keys.
 
     Args:
@@ -91,7 +95,9 @@ def _migrate_html_attributes_to_air_tag(node: Element) -> TagAttributesType:
         A mapping of normalized attribute names and values.
     """
     return {
-        migrate_attribute_name_to_air_tag(attr_name): _evaluate_attribute_value_to_py(
+        migrate_attribute_name_to_air_tag(
+            qualified_attribute_name(attr_name, namespace_prefixes=namespace_prefixes)
+        ): _evaluate_attribute_value_to_py(
             tag_name=local_name(node.tag), attr_name=local_name(attr_name), attr_value=attr_value
         )
         for attr_name, attr_value in node.attrib.items()

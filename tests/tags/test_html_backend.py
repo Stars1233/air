@@ -81,6 +81,27 @@ def test_svg_fragment_preserves_namespaced_attributes() -> None:
     )
 
 
+def test_svg_fragment_preserves_scoped_namespace_rebindings() -> None:
+    source = (
+        '<svg xmlns="http://www.w3.org/2000/svg" xmlns:foo="urn:one">'
+        '<g foo:bar="one"><g xmlns:foo="urn:two" foo:bar="two"></g>'
+        '<g foo:bar="three"></g></g></svg>'
+    )
+
+    assert serialize_html(parse_html(source, document=False)) == source
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("<image/>tail", "<image></image>tail"),
+        ("<image/><image/>", "<image></image><image></image>"),
+    ],
+)
+def test_svg_image_fragment_preserves_following_content(source: str, expected: str) -> None:
+    assert serialize_html(parse_html(source, document=False)) == expected
+
+
 def test_html5_parser_inserts_table_body() -> None:
     root = parse_html("<table><tr><td>x</table>", document=False)
 

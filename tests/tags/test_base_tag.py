@@ -457,9 +457,16 @@ def test_from_html() -> None:
 def test_from_html_recognizes_html_root_without_explicit_sections() -> None:
     source = "<!doctype html><html><p>P</p></html>"
 
-    assert air.Tag.from_html(source).render() == (
-        "<!doctype html><html><head></head><body><p>P</p></body></html>"
+    assert air.Tag.from_html(source).render() == ("<!doctype html><html><head></head><body><p>P</p></body></html>")
+
+
+def test_from_html_preserves_namespaced_attribute_names() -> None:
+    source = (
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="#x"></use></svg>'
     )
+
+    assert air.Tag.from_html(source).render() == source
 
 
 def test_to_source() -> None:

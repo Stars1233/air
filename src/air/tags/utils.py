@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from .types import LexerType, StrPath
 
 _HEAD_FRAGMENT_RE = re.compile(
-    r"^\s*<(?:base|head|link|meta|script|style|title)\b",
+    r"^[ \t\n\f\r]*<(?:base|head|link|meta|script|style|title)(?=[ \t\n\f\r/>])",
     re.IGNORECASE,
 )
 
@@ -213,8 +213,8 @@ def format_html(
     parse_as_document = with_body or source_is_document or head_fragment
     root = parse_html(source, document=parse_as_document)
     if parse_as_document:
-        source_has_head = bool(re.search(r"<head\b", source, re.IGNORECASE))
-        source_has_body = bool(re.search(r"<body\b", source, re.IGNORECASE))
+        source_has_head = bool(re.search(r"<head(?=[ \t\n\f\r/>])", source, re.IGNORECASE))
+        source_has_body = bool(re.search(r"<body(?=[ \t\n\f\r/>])", source, re.IGNORECASE))
         for child in list(root):
             name = local_name(child.tag)
             has_content = bool(child.attrib or len(child) or (child.text and not child.text.isspace()))

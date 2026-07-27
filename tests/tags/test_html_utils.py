@@ -130,33 +130,50 @@ def test_format_html_recognizes_documents_without_explicit_sections(source: str,
 def test_compact_format_html_keeps_valid_document_structure() -> None:
     source = "<!doctype html><html><p>P</p></html>"
 
-    assert compact_format_html(source) == (
-        "<!doctype html><html><head></head><body><p>P</p></body></html>"
-    )
+    assert compact_format_html(source) == ("<!doctype html><html><head></head><body><p>P</p></body></html>")
 
 
 def test_compact_format_html_recognizes_comment_between_doctype_and_root() -> None:
     source = "<!doctype html><!--lead--><html><body><p>P</p></body></html>"
 
+    assert compact_format_html(source) == ("<!doctype html><html><head></head><body><p>P</p></body></html>")
+
+
+def test_doctype_selects_document_parsing_when_html_tag_is_omitted() -> None:
+    source = "<!doctype html><title>T</title><p>P</p>"
+
+    assert format_html(source) == ("<html><head><title>T</title></head><body><p>P</p></body></html>")
     assert compact_format_html(source) == (
-        "<!doctype html><html><head></head><body><p>P</p></body></html>"
+        "<!doctype html><html><head><title>T</title></head><body><p>P</p></body></html>"
     )
+
+
+@pytest.mark.parametrize("tag_name", ["html-shell", "head-item"])
+def test_document_detection_does_not_match_custom_element_prefixes(tag_name: str) -> None:
+    source = f"<{tag_name}>x</{tag_name}>"
+
+    assert format_html(source) == source
+
+
+def test_document_detection_does_not_ignore_non_html_whitespace() -> None:
+    source = "\u00a0<!doctype html><html><body><p>P</p></body></html>"
+
+    result = compact_format_html(source)
+
+    assert result.startswith("\u00a0")
+    assert not result.startswith("<!doctype")
 
 
 def test_format_html_preserves_generated_head_and_body_content() -> None:
     source = "<title>T</title><p>P</p>"
 
-    assert format_html(source) == (
-        "<html><head><title>T</title></head><body><p>P</p></body></html>"
-    )
+    assert format_html(source) == ("<html><head><title>T</title></head><body><p>P</p></body></html>")
 
 
 def test_format_html_preserves_explicit_head_when_wrapping_body() -> None:
     source = "<head><title>T</title></head><body><p>P</p></body>"
 
-    assert format_html(source, with_body=True) == (
-        "<html><head><title>T</title></head><body><p>P</p></body></html>"
-    )
+    assert format_html(source, with_body=True) == ("<html><head><title>T</title></head><body><p>P</p></body></html>")
 
 
 def test_format_html_recognizes_explicit_head_fragment() -> None:

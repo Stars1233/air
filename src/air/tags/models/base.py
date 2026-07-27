@@ -9,7 +9,14 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar, Self
 from xml.etree.ElementTree import Element
 
-from air.tags._html import has_html_document_root, is_comment, iter_content, local_name, parse_html
+from air.tags._html import (
+    has_html_document_root,
+    is_comment,
+    iter_content,
+    local_name,
+    namespace_prefixes_for_node,
+    parse_html,
+)
 from air.tags.constants import (
     DEFAULT_INDENTATION_SIZE,
     EMPTY_JOIN_SEPARATOR,
@@ -764,7 +771,12 @@ class BaseTag:
         return air_tag
 
     @classmethod
-    def _from_html_node(cls, node: Element | str) -> BaseTag | str:
+    def _from_html_node(
+        cls,
+        node: Element | str,
+        *,
+        namespace_prefixes: dict[str, str] | None = None,
+    ) -> BaseTag | str:
         """Convert a parsed HTML node into an Air tag, text, or comment.
 
         Args:
@@ -782,12 +794,13 @@ class BaseTag:
         if is_comment(node):
             return cls._create_tag("comment", (node.text or "").strip())
         if local_name(node.tag):
-            return cls._from_element_node(node)
+            node_prefixes = namespace_prefixes_for_node(node, inherited=namespace_prefixes)
+            return cls._from_element_node(node, namespace_prefixes=node_prefixes)
         msg = f"Unable to parse <{node!r}>."
         raise ValueError(msg)
 
     @classmethod
-    def _from_element_node(cls, node: Element) -> BaseTag:
+    def _from_element_node(cls, node: Element, *, namespace_prefixes: dict[str, str]) -> BaseTag:
         """Recursively build a tag tree from a parsed HTML element node.
 
         Args:
@@ -796,8 +809,13 @@ class BaseTag:
         Returns:
             The reconstructed Air tag for the provided node.
         """
-        children: TagChildrenType = tuple(cls._from_html_node(child) for child in iter_content(node))
-        attributes: TagAttributesType = _migrate_html_attributes_to_air_tag(node)
+        children: TagChildrenType = tuple(
+            cls._from_html_node(child, namespace_prefixes=namespace_prefixes) for child in iter_content(node)
+        )
+        attributes: TagAttributesType = _migrate_html_attributes_to_air_tag(
+            node,
+            namespace_prefixes=namespace_prefixes,
+        )
         return cls._create_tag(local_name(node.tag), *children, **attributes)
 
     @classmethod
