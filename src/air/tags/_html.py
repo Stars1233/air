@@ -22,10 +22,11 @@ _DOCTYPE_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _FIRST_TAG_RE = re.compile(
-    rf"^{_HTML_WHITESPACE}*"
-    rf"(?:<!doctype{_HTML_WHITESPACE}+html(?={_HTML_WHITESPACE}|>)[^>]*>{_HTML_WHITESPACE}*)?"
+    rf"^{_HTML_WHITESPACE}*(?:<!--.*?-->{_HTML_WHITESPACE}*)*"
+    rf"(?:<!doctype{_HTML_WHITESPACE}+html(?={_HTML_WHITESPACE}|>)[^>]*>"
+    rf"{_HTML_WHITESPACE}*(?:<!--.*?-->{_HTML_WHITESPACE}*)*)?"
     rf"<([a-z][a-z0-9:-]*)(?={_HTML_WHITESPACE}|/?>)",
-    re.IGNORECASE,
+    re.IGNORECASE | re.DOTALL,
 )
 _HTML_DOCUMENT_RE = re.compile(
     rf"^{_HTML_WHITESPACE}*(?:<!--.*?-->{_HTML_WHITESPACE}*)*"
@@ -46,6 +47,17 @@ _PRESERVE_WHITESPACE_ELEMENTS = frozenset({
     "xmp",
 })
 _RAW_TEXT_ELEMENTS = frozenset({"iframe", "noembed", "noframes", "plaintext", "script", "style", "xmp"})
+_FRAGMENT_CONTAINERS = {
+    "caption": "table",
+    "col": "colgroup",
+    "colgroup": "table",
+    "tbody": "table",
+    "td": "tr",
+    "tfoot": "table",
+    "th": "tr",
+    "thead": "table",
+    "tr": "tbody",
+}
 _SVG_FRAGMENT_ROOTS = frozenset({"image", "svg"})
 _HTML_NAMESPACE = "http://www.w3.org/1999/xhtml"
 _SVG_NAMESPACE = "http://www.w3.org/2000/svg"
@@ -86,11 +98,16 @@ def parse_html(source: str, *, document: bool) -> Element:
         msg = "HTML source must not be empty."
         raise ValueError(msg)
     match = _FIRST_TAG_RE.match(source) if not document else None
-    if match and match.group(1).lower() in _SVG_FRAGMENT_ROOTS:
-        return _parse_svg_fragment(source, root_name=match.group(1).lower())
+    root_name = match.group(1).lower() if match else ""
+    if root_name in _SVG_FRAGMENT_ROOTS:
+        return _parse_svg_fragment(source, root_name=root_name)
     if document:
         return parse_document(source)
-    return parse_fragment(source)
+    if root_name in {"head", "body"}:
+        root = parse_fragment(source, container="html")
+        _unwrap_implicit_document_sections(root, explicit_section=root_name)
+        return root
+    return parse_fragment(source, container=_FRAGMENT_CONTAINERS.get(root_name, "div"))
 
 
 def has_html_document_root(source: str) -> bool:
@@ -258,6 +275,39 @@ def _collapse_whitespace(node: Element, *, preserve: bool = False) -> None:
         _collapse_whitespace(child, preserve=preserve)
         if child.tail and not preserve:
             child.tail = _WHITESPACE_RE.sub(" ", child.tail)
+
+
+def _unwrap_implicit_document_sections(root: Element, *, explicit_section: str) -> None:
+    """Remove HTML parser-generated head/body wrappers absent from the source."""
+    for child in list(root):
+        if local_name(child.tag) in {"head", "body"} - {explicit_section}:
+            _unwrap_child(root, child)
+
+
+def _unwrap_child(parent: Element, child: Element) -> None:
+    """Replace a child wrapper with its text and descendants in document order."""
+    position = list(parent).index(child)
+    leading_text = child.text
+    trailing_text = child.tail
+    grandchildren = list(child)
+    parent.remove(child)
+    if leading_text:
+        _append_text_at(parent, position, leading_text)
+    for grandchild in grandchildren:
+        child.remove(grandchild)
+        parent.insert(position, grandchild)
+        position += 1
+    if trailing_text:
+        _append_text_at(parent, position, trailing_text)
+
+
+def _append_text_at(parent: Element, position: int, text: str) -> None:
+    """Append text immediately before the child at ``position``."""
+    if position == 0:
+        parent.text = (parent.text or "") + text
+        return
+    previous = parent[position - 1]
+    previous.tail = (previous.tail or "") + text
 
 
 def _parse_fragment(source: str) -> Element:

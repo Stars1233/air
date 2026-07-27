@@ -460,6 +460,19 @@ def test_from_html_recognizes_html_root_without_explicit_sections() -> None:
     assert air.Tag.from_html(source).render() == ("<!doctype html><html><head></head><body><p>P</p></body></html>")
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "<head><title>x</title></head>",
+        "<body><p>x</p></body>",
+        "<colgroup><col></colgroup>",
+        "<tr><td>x</td></tr>",
+    ],
+)
+def test_from_html_preserves_context_sensitive_roots(source: str) -> None:
+    assert air.Tag.from_html(source).render() == source
+
+
 def test_from_html_preserves_namespaced_attribute_names() -> None:
     source = (
         '<svg xmlns="http://www.w3.org/2000/svg" '
@@ -648,9 +661,5 @@ def test_from_html_with_head_start_tag_only_raises_value_error() -> None:
         air.Tag.from_html("<head>")
 
 
-def test_from_html_with_head_element_only_raises_value_error() -> None:
-    with pytest.raises(
-        ValueError,
-        match=full_match("Tag.from_html(html_source) is unable to parse the HTML content."),
-    ):
-        air.Tag.from_html("<head></head>")
+def test_from_html_with_empty_head_element() -> None:
+    assert air.Tag.from_html("<head></head>") == air.Head()

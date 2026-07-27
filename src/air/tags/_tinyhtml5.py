@@ -85,10 +85,10 @@ def parse_document(source: str) -> Element:
     return cast("Element", parser.parse(source))
 
 
-def parse_fragment(source: str) -> Element:
+def parse_fragment(source: str, *, container: str = "div") -> Element:
     """Parse an HTML fragment into a synthetic ElementTree root."""
     parser = _ValuelessHTMLParser(namespace_html_elements=False)
-    return cast("Element", parser.parse_fragment(source))
+    return cast("Element", parser.parse_fragment(source, container=container))
 
 
 def is_valueless_attribute(value: Any) -> bool:

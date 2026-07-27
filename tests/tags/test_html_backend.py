@@ -122,6 +122,38 @@ def test_html5_parser_inserts_table_body() -> None:
     assert serialize_html(root) == "<table><tbody><tr><td>x</td></tr></tbody></table>"
 
 
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("<head><title>x</title></head>", "<head><title>x</title></head>"),
+        ("<body><p>x</p></body>", "<body><p>x</p></body>"),
+        ("<caption>x</caption>", "<caption>x</caption>"),
+        ("<colgroup><col></colgroup>", "<colgroup><col></colgroup>"),
+        ("<col>", "<col>"),
+        ("<tbody><tr><td>x</td></tr></tbody>", "<tbody><tr><td>x</td></tr></tbody>"),
+        ("<thead><tr><th>x</th></tr></thead>", "<thead><tr><th>x</th></tr></thead>"),
+        ("<tfoot><tr><td>x</td></tr></tfoot>", "<tfoot><tr><td>x</td></tr></tfoot>"),
+        ("<tr><td>x</td></tr>", "<tr><td>x</td></tr>"),
+        ("<td>x</td>", "<td>x</td>"),
+        ("<th>x</th>", "<th>x</th>"),
+    ],
+)
+def test_fragment_parser_preserves_context_sensitive_roots(source: str, expected: str) -> None:
+    assert serialize_html(parse_html(source, document=False)) == expected
+
+
+def test_fragment_parser_uses_context_after_leading_comment() -> None:
+    source = "<!--keep--><tr><td>x</td></tr>"
+
+    assert serialize_html(parse_html(source, document=False)) == source
+
+
+def test_head_fragment_does_not_treat_script_text_as_an_explicit_body() -> None:
+    source = '<head><script>const marker = "<body>";</script></head>'
+
+    assert serialize_html(parse_html(source, document=False)) == source
+
+
 def test_serializer_removes_foreign_content_namespace_prefixes() -> None:
     root = parse_html("<div><svg><circle></circle></svg><math><mi>x</mi></math></div>", document=False)
 
