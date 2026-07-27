@@ -1,5 +1,7 @@
 from xml.etree.ElementTree import Element
 
+import pytest
+
 from air.tags._html import compact_html, local_name, parse_html, serialize_html  # noqa: PLC2701
 
 
@@ -19,6 +21,20 @@ def test_compact_html_removes_comments_without_losing_tails() -> None:
     assert "<!--" not in result
     assert "a b" in result
     assert "</span> d" in result
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ('<script>const marker = "<!--keep-->";</script>', "<!--keep-->"),
+        ('<div data-marker="<!--keep-->">x</div>', "<!--keep-->"),
+        ("<textarea><!--keep--></textarea>", "&lt;!--keep--&gt;"),
+    ],
+)
+def test_compact_html_preserves_comment_syntax_in_content(source: str, expected: str) -> None:
+    result = compact_html(source, document=False)
+
+    assert expected in result
 
 
 def test_malformed_svg_falls_back_to_html5_parser() -> None:

@@ -13,7 +13,6 @@ from html5lib.serializer import serialize
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 _FIRST_TAG_RE = re.compile(r"^\s*(?:<!doctype\s+html\b[^>]*>\s*)?<([a-z][a-z0-9:-]*)\b", re.IGNORECASE)
 _SVG_FRAGMENT_ROOTS = frozenset({"image", "svg"})
 _SVG_NAMESPACE = "http://www.w3.org/2000/svg"
@@ -69,7 +68,6 @@ def serialize_html(
 
 def compact_html(source: str, *, document: bool) -> str:
     """Parse and compact HTML while preserving HTML5 semantics."""
-    source = _HTML_COMMENT_RE.sub("", source)
     return serialize_html(parse_html(source, document=document), compact=True)
 
 
