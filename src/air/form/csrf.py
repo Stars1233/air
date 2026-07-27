@@ -1,9 +1,9 @@
 """Zero-config CSRF protection for AirForm.
 
-Tokens are HMAC-signed with a per-process secret that's generated on
-first use. No configuration needed for single-worker deployments. For
-multi-worker production, set the AIRFORM_SECRET environment variable
-so all workers share the same secret.
+Tokens are HMAC-signed with a per-process secret. No configuration
+needed for single-worker deployments. For multi-worker production, set
+the AIRFORM_SECRET environment variable so all workers share the same
+secret.
 
 Token format: timestamp:nonce:signature
 """
@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import os
 import secrets
+import sys
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -23,9 +24,19 @@ if TYPE_CHECKING:
     from pydantic import GetCoreSchemaHandler
     from pydantic_core import CoreSchema
 
-#: Secret key for signing CSRF tokens. Generated lazily so runtimes such
-#: as Cloudflare Workers do not request entropy outside a request context.
-_SECRET: bytes | None = os.environ.get("AIRFORM_SECRET", "").encode() or None
+
+def _initial_secret() -> bytes | None:
+    """Load the configured secret or safely initialize a process-local one."""
+    if configured_secret := os.environ.get("AIRFORM_SECRET", "").encode():
+        return configured_secret
+    if sys.platform == "emscripten":
+        return None
+    return secrets.token_bytes(32)
+
+
+#: Secret key for signing CSRF tokens. Threaded runtimes generate it eagerly
+#: to avoid first-use races. Cloudflare Workers generate it inside a request.
+_SECRET: bytes | None = _initial_secret()
 
 #: How long a CSRF token stays valid (seconds). Default: 1 hour.
 CSRF_MAX_AGE: int = 3600
