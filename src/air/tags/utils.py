@@ -156,8 +156,8 @@ def compact_format_html(source: str) -> str:
     Returns:
         Space-efficient HTML suitable for inline embedding or network transfer.
 
-    Comments, optional closing tags, and excess whitespace are removed while
-    preserving HTML5 parsing semantics.
+    Comments and repeated whitespace are removed, and safe attribute quotes are
+    omitted, while preserving HTML5 parsing semantics.
     """
     return compact_html(source, document=is_full_html_document(source))
 
