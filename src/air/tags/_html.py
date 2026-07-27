@@ -7,6 +7,7 @@ from copy import deepcopy
 from html import escape
 from html.parser import HTMLParser as StandardHTMLParser
 from io import StringIO
+from string import ascii_lowercase, ascii_uppercase
 from typing import TYPE_CHECKING, Any, cast
 from xml.etree.ElementTree import Comment, Element, ParseError, TreeBuilder, XMLParser, indent, iterparse
 
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
 
 _DOCUMENT_FRAGMENT = "DOCUMENT_FRAGMENT"
 _HTML_WHITESPACE = r"[ \t\n\f\r]"
+_ASCII_LOWERCASE_TRANSLATION = str.maketrans(ascii_uppercase, ascii_lowercase)
 _DOCTYPE_RE = re.compile(
     rf"^{_HTML_WHITESPACE}*(?:<!--.*?-->{_HTML_WHITESPACE}*)*"
     rf"(<!doctype{_HTML_WHITESPACE}+html(?={_HTML_WHITESPACE}|>)[^>]*>)",
@@ -94,8 +96,8 @@ class _ValuelessAttributeParser(StandardHTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         """Record a start tag and attributes that have no value."""
-        valueless = frozenset(name.casefold() for name, value in attrs if value is None)
-        self.elements.append((tag.casefold(), valueless))
+        valueless = frozenset(_ascii_lower(name) for name, value in attrs if value is None)
+        self.elements.append((_ascii_lower(tag), valueless))
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         """Record a self-closing start tag."""
@@ -349,16 +351,19 @@ def mark_valueless_attributes(root: Element, *, source: str) -> None:
     parser.feed(source)
     parser.close()
     elements = list(_iter_elements_with_namespaces(root))
-    node_index = 0
+    matched_indices: set[int] = set()
     for source_name, valueless_attributes in parser.elements:
         match_index = next(
             (
                 index
-                for index in range(node_index, len(elements))
-                if qualified_element_name(
-                    elements[index][0].tag,
-                    namespace_prefixes=elements[index][1],
-                ).casefold()
+                for index, element in enumerate(elements)
+                if index not in matched_indices
+                and _ascii_lower(
+                    qualified_element_name(
+                        element[0].tag,
+                        namespace_prefixes=element[1],
+                    )
+                )
                 == source_name
             ),
             None,
@@ -368,14 +373,19 @@ def mark_valueless_attributes(root: Element, *, source: str) -> None:
         node, namespace_prefixes = elements[match_index]
         for name in node.attrib:
             qualified_name = qualified_attribute_name(name, namespace_prefixes=namespace_prefixes)
-            if qualified_name.casefold() in valueless_attributes:
+            if _ascii_lower(qualified_name) in valueless_attributes:
                 node.attrib[name] = _VALUELESS_ATTRIBUTE
-        node_index = match_index + 1
+        matched_indices.add(match_index)
 
 
 def is_valueless_attribute(value: Any) -> bool:
     """Return whether an attribute value represents omitted source syntax."""
     return isinstance(value, _ValuelessAttribute)
+
+
+def _ascii_lower(value: str) -> str:
+    """Lowercase ASCII letters without folding distinct Unicode characters."""
+    return value.translate(_ASCII_LOWERCASE_TRANSLATION)
 
 
 def _iter_elements_with_namespaces(

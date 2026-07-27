@@ -477,7 +477,10 @@ def test_from_html_to_source_supports_namespaced_attribute_names() -> None:
 
     generated_source = air.Tag.from_html_to_source(source)
 
-    ast.parse(generated_source, mode="eval")
+    compiled_source = compile(generated_source, "<generated>", "eval")
+    reconstructed = eval(compiled_source, {"air": air})
+
+    assert reconstructed.render() == source
 
 
 def test_from_html_preserves_explicit_empty_attribute_values() -> None:
@@ -490,6 +493,21 @@ def test_from_html_preserves_valueless_attributes() -> None:
     source = "<div data-x></div>"
 
     assert air.Tag.from_html(source).render() == source
+
+
+def test_from_html_uses_ascii_case_folding_for_attribute_names() -> None:
+    source = '<div data-\u017f data-s=""></div>'
+
+    assert air.Tag.from_html(source).render() == source
+
+
+def test_from_html_preserves_valueless_attributes_after_foster_parenting() -> None:
+    source = "<html><head></head><body><table><div data-x></div></table></body></html>"
+
+    rendered = air.Tag.from_html(source).render()
+
+    assert "<div data-x></div><table>" in rendered
+    assert 'data-x=""' not in rendered
 
 
 def test_to_source() -> None:

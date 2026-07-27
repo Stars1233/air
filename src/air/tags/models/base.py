@@ -360,7 +360,10 @@ class BaseTag:
             level=level, outer_padding=outer_padding, inner_padding=inner_padding
         )
         return _format_instantiation_call(
-            tag_name=self._name, instantiation_args=instantiation_args, outer_padding=outer_padding
+            tag_name=self._name,
+            module_name=self._module,
+            instantiation_args=instantiation_args,
+            outer_padding=outer_padding,
         )
 
     def _format_instantiation_arguments(self, level: int, outer_padding: str, inner_padding: str) -> str:

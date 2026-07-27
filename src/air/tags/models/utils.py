@@ -28,18 +28,25 @@ def _get_paddings(level: int) -> tuple[str, str]:
     return outer_padding, inner_padding
 
 
-def _format_instantiation_call(tag_name: str, instantiation_args: str, outer_padding: str) -> str:
+def _format_instantiation_call(
+    tag_name: str,
+    module_name: str,
+    instantiation_args: str,
+    outer_padding: str,
+) -> str:
     """Wrap formatted arguments in a constructor call.
 
     Args:
         tag_name: The name for the air-tag class.
+        module_name: The module that defines the air-tag class.
         instantiation_args: Prepared constructor arguments.
         outer_padding: Padding to prepend to the call.
 
     Returns:
         The full constructor call string.
     """
-    return f"{outer_padding}{AIR_PREFIX}{tag_name}({instantiation_args})"
+    public_module = "svg." if module_name.endswith(".svg") else ""
+    return f"{outer_padding}{AIR_PREFIX}{public_module}{tag_name}({instantiation_args})"
 
 
 def _wrap_multiline_instantiation_args(instantiation_args: str, outer_padding: str) -> str:
