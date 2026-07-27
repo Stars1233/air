@@ -91,6 +91,14 @@ def test_svg_fragment_preserves_scoped_namespace_rebindings() -> None:
     assert serialize_html(parse_html(source, document=False)) == source
 
 
+def test_svg_fragment_preserves_qualified_element_names_and_children() -> None:
+    source = (
+        '<svg xmlns="http://www.w3.org/2000/svg" xmlns:foo="urn:foo"><foo:br><foo:thing></foo:thing></foo:br></svg>'
+    )
+
+    assert serialize_html(parse_html(source, document=False)) == source
+
+
 @pytest.mark.parametrize(
     ("source", "expected"),
     [

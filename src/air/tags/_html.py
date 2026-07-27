@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from html import escape
+from html.parser import HTMLParser as StandardHTMLParser
 from io import StringIO
 from typing import TYPE_CHECKING, Any, cast
 from xml.etree.ElementTree import Comment, Element, ParseError, TreeBuilder, XMLParser, indent, iterparse
@@ -48,6 +49,7 @@ _PRESERVE_WHITESPACE_ELEMENTS = frozenset({
 })
 _RAW_TEXT_ELEMENTS = frozenset({"iframe", "noembed", "noframes", "noscript", "plaintext", "script", "style", "xmp"})
 _SVG_FRAGMENT_ROOTS = frozenset({"image", "svg"})
+_HTML_NAMESPACE = "http://www.w3.org/1999/xhtml"
 _SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 _XLINK_NAMESPACE = "http://www.w3.org/1999/xlink"
 _XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace"
@@ -74,6 +76,30 @@ _VOID_ELEMENTS = frozenset({
     "wbr",
 })
 _WHITESPACE_RE = re.compile(r"[ \t\n\f\r]+")
+
+
+class _ValuelessAttribute(str):  # noqa: FURB189
+    """Marker for an attribute written without an equals sign."""
+
+
+_VALUELESS_ATTRIBUTE = _ValuelessAttribute()
+
+
+class _ValuelessAttributeParser(StandardHTMLParser):
+    """Collect source start tags and their valueless attributes."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.elements: list[tuple[str, frozenset[str]]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """Record a start tag and attributes that have no value."""
+        valueless = frozenset(name.casefold() for name, value in attrs if value is None)
+        self.elements.append((tag.casefold(), valueless))
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """Record a self-closing start tag."""
+        self.handle_starttag(tag, attrs)
 
 
 def parse_html(source: str, *, document: bool) -> Element:
@@ -186,7 +212,7 @@ def _serialize_node(
     if is_comment(node):
         return f"<!--{node.text or ''}-->"
     namespace_prefixes = namespace_prefixes_for_node(node, inherited=namespace_prefixes)
-    name = local_name(node.tag)
+    name = qualified_element_name(node.tag, namespace_prefixes=namespace_prefixes)
     attributes = "".join(
         _serialize_attribute(
             key,
@@ -197,7 +223,7 @@ def _serialize_node(
         for key, value in node.attrib.items()
     )
     opening = f"<{name}{attributes}>"
-    if name in _VOID_ELEMENTS:
+    if _is_html_void_element(node.tag, name=name):
         return opening
     rendered = [opening, _serialize_text(node.text, parent=name)]
     for child in node:
@@ -305,6 +331,73 @@ def namespace_prefixes_for_node(
 def qualified_attribute_name(name: str, *, namespace_prefixes: dict[str, str]) -> str:
     """Return a parsed attribute name with its in-scope namespace prefix."""
     return _serialize_attribute_name(name, namespace_prefixes=namespace_prefixes)
+
+
+def qualified_element_name(tag: Any, *, namespace_prefixes: dict[str, str]) -> str:
+    """Return a parsed element name with its in-scope namespace prefix."""
+    name = local_name(tag)
+    if isinstance(tag, str) and tag.startswith("{"):
+        namespace = tag[1:].partition("}")[0]
+        if prefix := namespace_prefixes.get(namespace):
+            return f"{prefix}:{name}"
+    return name
+
+
+def mark_valueless_attributes(root: Element, *, source: str) -> None:
+    """Restore the distinction between valueless and explicitly empty attributes."""
+    parser = _ValuelessAttributeParser()
+    parser.feed(source)
+    parser.close()
+    elements = list(_iter_elements_with_namespaces(root))
+    node_index = 0
+    for source_name, valueless_attributes in parser.elements:
+        match_index = next(
+            (
+                index
+                for index in range(node_index, len(elements))
+                if qualified_element_name(
+                    elements[index][0].tag,
+                    namespace_prefixes=elements[index][1],
+                ).casefold()
+                == source_name
+            ),
+            None,
+        )
+        if match_index is None:
+            continue
+        node, namespace_prefixes = elements[match_index]
+        for name in node.attrib:
+            qualified_name = qualified_attribute_name(name, namespace_prefixes=namespace_prefixes)
+            if qualified_name.casefold() in valueless_attributes:
+                node.attrib[name] = _VALUELESS_ATTRIBUTE
+        node_index = match_index + 1
+
+
+def is_valueless_attribute(value: Any) -> bool:
+    """Return whether an attribute value represents omitted source syntax."""
+    return isinstance(value, _ValuelessAttribute)
+
+
+def _iter_elements_with_namespaces(
+    node: Element,
+    *,
+    inherited: dict[str, str] | None = None,
+) -> Iterator[tuple[Element, dict[str, str]]]:
+    namespace_prefixes = namespace_prefixes_for_node(node, inherited=inherited)
+    if isinstance(node.tag, str) and local_name(node.tag) != _DOCUMENT_FRAGMENT:
+        yield node, namespace_prefixes
+    for child in node:
+        if isinstance(child.tag, str):
+            yield from _iter_elements_with_namespaces(child, inherited=namespace_prefixes)
+
+
+def _is_html_void_element(tag: Any, *, name: str) -> bool:
+    """Return whether a parsed tag is an HTML void element."""
+    if name not in _VOID_ELEMENTS or not isinstance(tag, str):
+        return False
+    if tag.startswith("{"):
+        return tag[1:].partition("}")[0] == _HTML_NAMESPACE
+    return ":" not in tag
 
 
 def _parse_svg_fragment(source: str, *, root_name: str) -> Element:

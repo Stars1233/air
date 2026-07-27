@@ -14,6 +14,7 @@ from air.tags._html import (
     is_comment,
     iter_content,
     local_name,
+    mark_valueless_attributes,
     namespace_prefixes_for_node,
     parse_html,
 )
@@ -758,6 +759,7 @@ class BaseTag:
             raise ValueError(msg)
         is_fragment = not has_html_document_root(html_source)
         root = parse_html(html_source, document=not is_fragment)
+        mark_valueless_attributes(root, source=html_source)
         if is_fragment and local_name(root.tag) == "DOCUMENT_FRAGMENT":
             parsed_nodes = [node for node in iter_content(root) if isinstance(node, Element)]
             root = parsed_nodes[0] if len(parsed_nodes) == 1 else root

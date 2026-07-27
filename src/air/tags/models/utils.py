@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import ast
+from keyword import iskeyword
 from typing import TYPE_CHECKING
 
-from air.tags._html import local_name, qualified_attribute_name
+from air.tags._html import is_valueless_attribute, local_name, qualified_attribute_name
 from air.tags.constants import AIR_PREFIX, BOOLEAN_HTML_ATTRIBUTES, INDENT_UNIT
 from air.tags.utils import migrate_attribute_name_to_air_tag
 
@@ -78,7 +79,9 @@ def _format_attribute_instantiation(attr_name: str, attr_value: AttributeType, p
     Returns:
         The formatted keyword argument string.
     """
-    return f"{padding}{attr_name}={attr_value!r}"
+    if attr_name.isidentifier() and not iskeyword(attr_name):
+        return f"{padding}{attr_name}={attr_value!r}"
+    return f"{padding}**{{{attr_name!r}: {attr_value!r}}}"
 
 
 def _migrate_html_attributes_to_air_tag(
@@ -121,7 +124,7 @@ def _evaluate_attribute_value_to_py(tag_name: str | None, attr_name: str, attr_v
         The evaluated value of the given attribute. The type of the returned value
         may vary depending on the input (e.g., boolean, literal value, or original string).
     """
-    if not attr_value:
+    if attr_value is None or is_valueless_attribute(attr_value):
         return True
     if attr_value.lower() == "true" or attr_value.lower() == "false":
         return attr_value

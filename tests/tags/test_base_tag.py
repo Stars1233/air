@@ -469,6 +469,29 @@ def test_from_html_preserves_namespaced_attribute_names() -> None:
     assert air.Tag.from_html(source).render() == source
 
 
+def test_from_html_to_source_supports_namespaced_attribute_names() -> None:
+    source = (
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="#x"></use></svg>'
+    )
+
+    generated_source = air.Tag.from_html_to_source(source)
+
+    ast.parse(generated_source, mode="eval")
+
+
+def test_from_html_preserves_explicit_empty_attribute_values() -> None:
+    source = '<div data-x=""></div>'
+
+    assert air.Tag.from_html(source).render() == source
+
+
+def test_from_html_preserves_valueless_attributes() -> None:
+    source = "<div data-x></div>"
+
+    assert air.Tag.from_html(source).render() == source
+
+
 def test_to_source() -> None:
     actual_fragment_air_tag_source = FRAGMENT_AIR_TAG_SAMPLE.to_source()
     expected_fragment_air_tag_source = FRAGMENT_AIR_TAG_SOURCE_SAMPLE
