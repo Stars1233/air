@@ -85,13 +85,13 @@ dependencies = [
     "fastapi>=0.128.8", # https://pypi.org/project/fastapi
     "frozendict>=2.4.7", # https://pypi.org/project/frozendict
     "itsdangerous>=2.2.0", # https://pypi.org/project/itsdangerous
-    "pygments>=2.19.2,!=2.20.0", # https://pypi.org/project/pygments
+    "pygments>=2.19.2,!=2.20.0; platform_system != 'Emscripten'", # https://pypi.org/project/pygments
     "python-multipart>=0.0.22", # https://pypi.org/project/python-multipart
-    "rich>=14.3.2", # https://pypi.org/project/rich
+    "rich>=14.3.2; platform_system != 'Emscripten'", # https://pypi.org/project/rich
     "staticware>=0.2.0", # https://pypi.org/project/staticware
     "tinyhtml5>=2.1.0", # https://pypi.org/project/tinyhtml5
-    "typer>=0.23.0", # https://pypi.org/project/typer
-    "uvicorn>=0.40.0", # https://pypi.org/project/uvicorn
+    "typer>=0.23.0; platform_system != 'Emscripten'", # https://pypi.org/project/typer
+    "uvicorn>=0.40.0; platform_system != 'Emscripten'", # https://pypi.org/project/uvicorn
 ]
 # endregion project
 

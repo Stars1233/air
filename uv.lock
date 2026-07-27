@@ -11,13 +11,13 @@ dependencies = [
     { name = "frozendict" },
     { name = "itsdangerous" },
     { name = "jinja2" },
-    { name = "pygments" },
+    { name = "pygments", marker = "sys_platform != 'emscripten'" },
     { name = "python-multipart" },
-    { name = "rich" },
+    { name = "rich", marker = "sys_platform != 'emscripten'" },
     { name = "staticware" },
     { name = "tinyhtml5" },
-    { name = "typer" },
-    { name = "uvicorn" },
+    { name = "typer", marker = "sys_platform != 'emscripten'" },
+    { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
 ]
 
 [package.optional-dependencies]
@@ -98,13 +98,13 @@ requires-dist = [
     { name = "frozendict", specifier = ">=2.4.7" },
     { name = "itsdangerous", specifier = ">=2.2.0" },
     { name = "jinja2", specifier = ">=3.1.6" },
-    { name = "pygments", specifier = ">=2.19.2,!=2.20.0" },
+    { name = "pygments", marker = "sys_platform != 'emscripten'", specifier = ">=2.19.2,!=2.20.0" },
     { name = "python-multipart", specifier = ">=0.0.22" },
-    { name = "rich", specifier = ">=14.3.2" },
+    { name = "rich", marker = "sys_platform != 'emscripten'", specifier = ">=14.3.2" },
     { name = "staticware", specifier = ">=0.2.0" },
     { name = "tinyhtml5", specifier = ">=2.1.0" },
-    { name = "typer", specifier = ">=0.23.0" },
-    { name = "uvicorn", specifier = ">=0.40.0" },
+    { name = "typer", marker = "sys_platform != 'emscripten'", specifier = ">=0.23.0" },
+    { name = "uvicorn", marker = "sys_platform != 'emscripten'", specifier = ">=0.40.0" },
 ]
 provides-extras = ["postgres", "standard"]
 
