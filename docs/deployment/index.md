@@ -6,7 +6,7 @@ Air applications can be deployed in several ways. We provide detailed examples f
 
 - [Containerizing an Air application](https://github.com/feldroy/air/tree/main/examples/containerize)
 - [Deploying an Air application to Kubernetes](https://github.com/feldroy/air/tree/main/examples/deployment/k8s)
-- [Testing the Cloudflare Workers compatibility branch](cloudflare-workers.md)
+- [Deploying Air to Cloudflare Workers](cloudflare-workers.md)
 
 ## Hosting Platforms
 
