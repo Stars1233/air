@@ -135,10 +135,7 @@ def adapt_exception_handlers[Key](
     handlers: dict[Key, HTTPExceptionHandler],
 ) -> dict[Key, HTTPExceptionHandler]:
     """Adapt each handler without capturing a loop variable in its wrapper."""
-    return {
-        key: adapt_exception_handler(handler)
-        for key, handler in handlers.items()
-    }
+    return {key: adapt_exception_handler(handler) for key, handler in handlers.items()}
 
 
 type ExceptionHandlersType = dict[int | type[Exception], HTTPExceptionHandler]
