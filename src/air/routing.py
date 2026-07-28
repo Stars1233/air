@@ -210,8 +210,8 @@ class RouterMixin:
         """Wrap func to convert non-Response returns using response_class.
 
         Preserves the original sync/async nature where threads are available.
-        On WebAssembly runtimes such as Cloudflare Workers, sync handlers are
-        wrapped as coroutines because Python threads are unavailable.
+        On Emscripten runtimes, sync handlers are wrapped as coroutines because
+        Python threads are unavailable.
 
         Returns:
             A wrapped endpoint function with the same sync/async signature.

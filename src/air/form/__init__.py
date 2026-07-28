@@ -2,6 +2,7 @@
 
 Pro-tip: Always validate incoming data."""
 
+from air.form.csrf import configure_csrf_secret as configure_csrf_secret
 from air.form.main import (
     AirForm as AirForm,
     SafeHTML as SafeHTML,
@@ -16,6 +17,7 @@ from air.form.styles import default_css as default_css
 __all__ = [
     "AirForm",
     "SafeHTML",
+    "configure_csrf_secret",
     "default_css",
     "default_form_widget",
     "errors_to_dict",

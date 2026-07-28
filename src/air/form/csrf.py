@@ -1,9 +1,9 @@
-"""Zero-config CSRF protection for AirForm.
+"""CSRF protection for AirForm.
 
-Tokens are HMAC-signed with a per-process secret. No configuration
-needed for single-worker deployments. For multi-worker production, set
-the AIRFORM_SECRET environment variable so all workers share the same
-secret.
+Tokens are HMAC-signed with a per-process secret. No configuration is
+needed for single-process deployments. For multi-process production, set
+the AIRFORM_SECRET environment variable or call
+``configure_csrf_secret()`` so every process uses the same secret.
 
 Token format: timestamp:nonce:signature
 """
@@ -35,7 +35,7 @@ def _initial_secret() -> bytes | None:
 
 
 #: Secret key for signing CSRF tokens. Threaded runtimes generate it eagerly
-#: to avoid first-use races. Cloudflare Workers generate it inside a request.
+#: to avoid first-use races. Emscripten runtimes generate it on first use.
 _SECRET: bytes | None = _initial_secret()
 
 #: How long a CSRF token stays valid (seconds). Default: 1 hour.
@@ -43,6 +43,36 @@ CSRF_MAX_AGE: int = 3600
 
 #: Name of the hidden input field in the form.
 CSRF_FIELD_NAME: str = "csrf_token"
+
+
+def configure_csrf_secret(secret: str | bytes) -> None:
+    """Configure the secret used to sign and validate CSRF tokens.
+
+    Use this when the runtime supplies secrets through an API other than
+    environment variables. Configure the same non-empty secret in every process
+    before rendering or validating forms. Replacing it later invalidates tokens
+    signed with the previous secret.
+
+    Args:
+        secret: A non-empty text or byte secret.
+
+    Raises:
+        TypeError: If ``secret`` is not text or bytes.
+        ValueError: If ``secret`` is empty.
+    """
+    if isinstance(secret, str):
+        normalized_secret = secret.encode()
+    elif isinstance(secret, bytes):
+        normalized_secret = secret
+    else:
+        msg = "CSRF secret must be str or bytes."
+        raise TypeError(msg)
+    if not normalized_secret:
+        msg = "CSRF secret must not be empty."
+        raise ValueError(msg)
+
+    global _SECRET
+    _SECRET = normalized_secret
 
 
 def generate_csrf_token() -> str:

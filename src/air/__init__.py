@@ -9,7 +9,10 @@ from staticware import (
 )
 
 from air.field import AirField as AirField
-from air.form import AirForm as AirForm
+from air.form import (
+    AirForm as AirForm,
+    configure_csrf_secret as configure_csrf_secret,
+)
 from air.model import (
     AirDB as AirDB,
     AirModel as AirModel,

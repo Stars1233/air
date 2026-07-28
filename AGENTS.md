@@ -111,8 +111,8 @@ All standard HTTP methods: `app.get()`, `app.post()`, `app.put()`, `app.patch()`
 
 Use `async def` when the handler calls `await` (e.g. `await request.form()`, `await request.json()`). Use plain `def` for everything else. Both work in all cases, but mixing `await` into a `def` route is a syntax error, and using `async def` without `await` wastes no resources but is unnecessary.
 
-On WebAssembly runtimes such as Cloudflare Workers, Air runs plain `def` handlers
-and synchronous dependencies on the event loop because Python threads are
+On Emscripten/WebAssembly runtimes, Air runs plain `def` handlers and
+synchronous dependencies on the event loop because Python threads are
 unavailable. Keep synchronous work short, and use `async def` for handlers and
 dependencies that perform I/O.
 
@@ -305,7 +305,7 @@ def contact():
     )
 ```
 
-`form.render()` returns SafeHTML that embeds directly in Air Tags without `air.Raw()` wrapping. After validation failure, it preserves submitted values and shows errors inline. CSRF protection is automatic. For multi-worker production, set `AIRFORM_SECRET` env var so all workers share the same signing key.
+`form.render()` returns SafeHTML that embeds directly in Air Tags without `air.Raw()` wrapping. After validation failure, it preserves submitted values and shows errors inline. CSRF protection is automatic. For multi-process production, set `AIRFORM_SECRET` so every process shares the same signing key. On runtimes that expose secrets through another API, call `air.configure_csrf_secret(secret)` before rendering or validating forms.
 
 ### Validating submitted data
 
