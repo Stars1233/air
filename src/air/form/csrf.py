@@ -160,7 +160,9 @@ def _url_origin(url: str, *, allow_path: bool) -> tuple[str, str, int] | None:
         or (not allow_path and (parsed.path or parsed.query))
     ):
         return None
-    return parsed.scheme, hostname, port or (443 if parsed.scheme == "https" else 80)
+    if port is None:
+        port = 443 if parsed.scheme == "https" else 80
+    return parsed.scheme, hostname, port
 
 
 def _check_csrf_origin(request: Request) -> None:

@@ -137,6 +137,7 @@ def test_check_csrf_origin_accepts_exact_origin(headers: tuple[tuple[str, str], 
         pytest.param((("Origin", "https://attacker.example"),), id="cross-origin"),
         pytest.param((("Origin", "https://example.test.attacker.example"),), id="hostname-suffix"),
         pytest.param((("Origin", "https://example.test:444"),), id="different-port"),
+        pytest.param((("Origin", "https://example.test:0"),), id="explicit-zero-port"),
         pytest.param((("Origin", "https://user@example.test"),), id="userinfo"),
         pytest.param((("Origin", "https://example.test/path"),), id="origin-with-path"),
         pytest.param(
