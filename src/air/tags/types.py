@@ -11,5 +11,5 @@ if TYPE_CHECKING:
     # noinspection PyUnresolvedReferences
     from pygments.lexers.python import PythonLexer
 
-type LexerType = HtmlLexer | PythonLexer
+type LexerType = HtmlLexer | PythonLexer | str
 type StrPath = PathLike | Path | str

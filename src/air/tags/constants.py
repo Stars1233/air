@@ -5,12 +5,6 @@ from typing import Final, Literal
 
 from frozendict import frozendict
 
-# noinspection PyUnresolvedReferences
-from pygments.lexers.html import HtmlLexer
-
-# noinspection PyUnresolvedReferences
-from pygments.lexers.python import PythonLexer
-
 
 class TagKeys:
     NAME: Final = "name"
@@ -98,7 +92,6 @@ BOOLEAN_HTML_ATTRIBUTES: Final = {
     "shadowrootdelegatesfocus": frozenset({"template"}),
     "shadowrootserializable": frozenset({"template"}),
 }
-FORMAT_HTML_ENCODING: Final = "unicode"
 HTML_DOCTYPE: Final = "<!doctype html>"
 DEFAULT_THEME: Final = "dracula"
 HTML_PANEL_TITLE: Final = "Air → HTML"
@@ -119,8 +112,8 @@ EMPTY_JOIN_SEPARATOR: Final = ""
 AIR_PREFIX: Final = "air."
 HOMEPAGE_FILE_NAME: Final = "index.html"
 HTML_SUFFIX: Final = ".html"
-HTML_LEXER: Final = HtmlLexer()
-PYTHON_LEXER: Final = PythonLexer()
+HTML_LEXER: Final = "html"
+PYTHON_LEXER: Final = "python"
 _LOOKS_LIKE_FULL_HTML_UNICODE_RE: Final = re.compile(
     r"""
     \s*

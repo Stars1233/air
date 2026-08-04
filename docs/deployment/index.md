@@ -6,6 +6,7 @@ Air applications can be deployed in several ways. We provide detailed examples f
 
 - [Containerizing an Air application](https://github.com/feldroy/air/tree/main/examples/containerize)
 - [Deploying an Air application to Kubernetes](https://github.com/feldroy/air/tree/main/examples/deployment/k8s)
+- [Running Air on Emscripten/WebAssembly](webassembly.md)
 
 ## Hosting Platforms
 

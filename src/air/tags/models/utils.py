@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import ast
+from keyword import iskeyword
 from typing import TYPE_CHECKING
 
+from air.tags._html import is_valueless_attribute, local_name, qualified_attribute_name
 from air.tags.constants import AIR_PREFIX, BOOLEAN_HTML_ATTRIBUTES, INDENT_UNIT
 from air.tags.utils import migrate_attribute_name_to_air_tag
 
 if TYPE_CHECKING:
-    from selectolax.lexbor import LexborHTMLParser, LexborNode
+    from xml.etree.ElementTree import Element
 
     from .base import AttributeType, Renderable, TagAttributesType
 
@@ -26,18 +28,25 @@ def _get_paddings(level: int) -> tuple[str, str]:
     return outer_padding, inner_padding
 
 
-def _format_instantiation_call(tag_name: str, instantiation_args: str, outer_padding: str) -> str:
+def _format_instantiation_call(
+    tag_name: str,
+    module_name: str,
+    instantiation_args: str,
+    outer_padding: str,
+) -> str:
     """Wrap formatted arguments in a constructor call.
 
     Args:
         tag_name: The name for the air-tag class.
+        module_name: The module that defines the air-tag class.
         instantiation_args: Prepared constructor arguments.
         outer_padding: Padding to prepend to the call.
 
     Returns:
         The full constructor call string.
     """
-    return f"{outer_padding}{AIR_PREFIX}{tag_name}({instantiation_args})"
+    public_module = "svg." if module_name.endswith(".svg") else ""
+    return f"{outer_padding}{AIR_PREFIX}{public_module}{tag_name}({instantiation_args})"
 
 
 def _wrap_multiline_instantiation_args(instantiation_args: str, outer_padding: str) -> str:
@@ -77,10 +86,16 @@ def _format_attribute_instantiation(attr_name: str, attr_value: AttributeType, p
     Returns:
         The formatted keyword argument string.
     """
-    return f"{padding}{attr_name}={attr_value!r}"
+    if attr_name.isascii() and attr_name.isidentifier() and not iskeyword(attr_name):
+        return f"{padding}{attr_name}={attr_value!r}"
+    return f"{padding}**{{{attr_name!r}: {attr_value!r}}}"
 
 
-def _migrate_html_attributes_to_air_tag(node: LexborNode) -> TagAttributesType:
+def _migrate_html_attributes_to_air_tag(
+    node: Element,
+    *,
+    namespace_prefixes: dict[str, str],
+) -> TagAttributesType:
     """Convert parsed HTML attributes to Air tag attribute keys.
 
     Args:
@@ -90,10 +105,12 @@ def _migrate_html_attributes_to_air_tag(node: LexborNode) -> TagAttributesType:
         A mapping of normalized attribute names and values.
     """
     return {
-        migrate_attribute_name_to_air_tag(attr_name): _evaluate_attribute_value_to_py(
-            tag_name=node.tag, attr_name=attr_name, attr_value=attr_value
+        migrate_attribute_name_to_air_tag(
+            qualified_attribute_name(attr_name, namespace_prefixes=namespace_prefixes)
+        ): _evaluate_attribute_value_to_py(
+            tag_name=local_name(node.tag), attr_name=local_name(attr_name), attr_value=attr_value
         )
-        for attr_name, attr_value in node.attributes.items()
+        for attr_name, attr_value in node.attrib.items()
     }
 
 
@@ -114,7 +131,7 @@ def _evaluate_attribute_value_to_py(tag_name: str | None, attr_name: str, attr_v
         The evaluated value of the given attribute. The type of the returned value
         may vary depending on the input (e.g., boolean, literal value, or original string).
     """
-    if attr_value is None:
+    if attr_value is None or is_valueless_attribute(attr_value):
         return True
     if attr_value.lower() == "true" or attr_value.lower() == "false":
         return attr_value
@@ -168,29 +185,3 @@ def is_conforming_boolean_value(attr_name: str, attr_value: str | None) -> bool:
         comparison or is `None`/evaluates to `False`. Otherwise, False.
     """
     return not attr_value or attr_name.casefold() == attr_value.casefold()
-
-
-def _is_lexbor_html_parser_valid(parser: LexborHTMLParser, *, is_fragment: bool) -> bool:
-    """
-    Validates the given Lexbor HTML parser based on the provided conditions.
-
-    This function checks whether the provided parser is valid by ensuring that
-    essential components of the parser, such as the root, HTML, head, and body
-    elements, meet the required conditions. Depending on whether the `is_fragment`
-    flag is set, additional checks for the head and body elements are performed.
-
-    Args:
-        parser: The HTML parser to validate.
-        is_fragment: Indicates whether the validation should treat the parser's
-            content as a fragment. When True, the absence of head and body elements
-            does not result in invalidation.
-
-    Returns:
-        True if the parser is deemed valid based on the validation criteria;
-        otherwise, False.
-    """
-    if not parser or parser.root is None or not parser.root.html or not parser.html:
-        return False
-    if is_fragment:
-        return parser.head is None and parser.body is None
-    return parser.head is not None and parser.body is not None

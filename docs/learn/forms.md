@@ -119,6 +119,16 @@ form.render()
 
 Each field is wrapped in a `<div class="air-field">` with a label, input, and (after validation) error messages. HTML5 validation attributes (`required`, `minlength`, `maxlength`) are derived from Pydantic constraints. CSRF protection is automatic.
 
+For multi-process production, set `AIRFORM_SECRET` so every process signs
+forms with the same key. If the runtime exposes secrets through another API,
+configure the key before rendering or validating forms:
+
+```python
+import air
+
+air.configure_csrf_secret(runtime_secret)
+```
+
 ## Validating a form
 
 ### From a request

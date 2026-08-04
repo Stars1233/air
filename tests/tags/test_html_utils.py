@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import pytest
-from lxml.etree import ParserError
 
 from air.tags.constants import HTML_DOCTYPE
 
 # Adjust this import path if needed for your project layout.
 from air.tags.utils import (
+    compact_format_html,
     format_html,
     pretty_format_html,
 )
@@ -104,18 +104,96 @@ def test_pretty_format_html_all_parameter_combinations(*, with_body: bool, with_
     assert result == expected
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "<span>a</span> between <span>b</span>",
+        "<b>a</b>, <i>b</i>!",
+        "prefix <span>a</span> suffix",
+    ],
+)
+def test_pretty_format_html_preserves_top_level_text(source: str) -> None:
+    assert pretty_format_html(source) == f"{source}\n"
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("<!doctype html><html></html>", "<html></html>"),
+        ("<!doctype html><html><p>P</p></html>", "<html><body><p>P</p></body></html>"),
+    ],
+)
+def test_format_html_recognizes_documents_without_explicit_sections(source: str, expected: str) -> None:
+    assert format_html(source) == expected
+
+
+def test_compact_format_html_keeps_valid_document_structure() -> None:
+    source = "<!doctype html><html><p>P</p></html>"
+
+    assert compact_format_html(source) == ("<!doctype html><html><head></head><body><p>P</p></body></html>")
+
+
+def test_compact_format_html_recognizes_comment_between_doctype_and_root() -> None:
+    source = "<!doctype html><!--lead--><html><body><p>P</p></body></html>"
+
+    assert compact_format_html(source) == ("<!doctype html><html><head></head><body><p>P</p></body></html>")
+
+
+def test_doctype_selects_document_parsing_when_html_tag_is_omitted() -> None:
+    source = "<!doctype html><title>T</title><p>P</p>"
+
+    assert format_html(source) == ("<html><head><title>T</title></head><body><p>P</p></body></html>")
+    assert compact_format_html(source) == (
+        "<!doctype html><html><head><title>T</title></head><body><p>P</p></body></html>"
+    )
+
+
+@pytest.mark.parametrize("tag_name", ["html-shell", "head-item"])
+def test_document_detection_does_not_match_custom_element_prefixes(tag_name: str) -> None:
+    source = f"<{tag_name}>x</{tag_name}>"
+
+    assert format_html(source) == source
+
+
+def test_document_detection_does_not_ignore_non_html_whitespace() -> None:
+    source = "\u00a0<!doctype html><html><body><p>P</p></body></html>"
+
+    result = compact_format_html(source)
+
+    assert result.startswith("\u00a0")
+    assert not result.startswith("<!doctype")
+
+
+def test_format_html_preserves_generated_head_and_body_content() -> None:
+    source = "<title>T</title><p>P</p>"
+
+    assert format_html(source) == ("<html><head><title>T</title></head><body><p>P</p></body></html>")
+
+
+def test_format_html_preserves_explicit_head_when_wrapping_body() -> None:
+    source = "<head><title>T</title></head><body><p>P</p></body>"
+
+    assert format_html(source, with_body=True) == ("<html><head><title>T</title></head><body><p>P</p></body></html>")
+
+
+def test_format_html_recognizes_explicit_head_fragment() -> None:
+    source = "<head><title>T</title></head>"
+
+    assert format_html(source) == "<html><head><title>T</title></head></html>"
+
+
 # -----------------------------
 # Edge case: empty input raises
 # -----------------------------
 
 
-def test_format_html_empty_raises_parser_error() -> None:
-    with pytest.raises(ParserError) as exc:
+def test_format_html_empty_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="HTML source must not be empty") as exc:
         _ = format_html("")  # no defaults passed
-    assert exc.type.__name__ == "ParserError"
+    assert exc.type is ValueError
 
 
-def test_pretty_format_html_empty_raises_parser_error() -> None:
-    with pytest.raises(ParserError) as exc:
+def test_pretty_format_html_empty_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="HTML source must not be empty") as exc:
         _ = pretty_format_html("")  # no defaults passed
-    assert exc.type.__name__ == "ParserError"
+    assert exc.type is ValueError

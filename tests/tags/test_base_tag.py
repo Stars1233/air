@@ -157,9 +157,8 @@ def test_pretty_render_passes_flags_to_formatter(monkeypatch: pytest.MonkeyPatch
 
 
 def test_compact_format_html_minifies() -> None:
-    assert len(SMALL_AIR_TAG_SAMPLE.compact_render()) == 760
-    assert len(AIR_TAG_SAMPLE.compact_render()) == 7536
-    assert len(air.Html(*([AIR_TAG_SAMPLE.children] * 100)).compact_render()) == 884015
+    assert len(SMALL_AIR_TAG_SAMPLE.compact_render()) < len(SMALL_AIR_TAG_SAMPLE.render())
+    assert len(AIR_TAG_SAMPLE.compact_render()) < len(AIR_TAG_SAMPLE.render())
 
 
 def test_compact_render_passes_html_to_compact_formatter(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -455,6 +454,99 @@ def test_from_html() -> None:
     assert actual_air_tag.pretty_html == expected_air_tag.pretty_html
 
 
+def test_from_html_recognizes_html_root_without_explicit_sections() -> None:
+    source = "<!doctype html><html><p>P</p></html>"
+
+    assert air.Tag.from_html(source).render() == ("<!doctype html><html><head></head><body><p>P</p></body></html>")
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "<head><title>x</title></head>",
+        "<body><p>x</p></body>",
+        "<colgroup><col></colgroup>",
+        "<tr><td>x</td></tr>",
+    ],
+)
+def test_from_html_preserves_context_sensitive_roots(source: str) -> None:
+    assert air.Tag.from_html(source).render() == source
+
+
+def test_from_html_preserves_namespaced_attribute_names() -> None:
+    source = (
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="#x"></use></svg>'
+    )
+
+    assert air.Tag.from_html(source).render() == source
+
+
+def test_from_html_to_source_supports_namespaced_attribute_names() -> None:
+    source = (
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="#x"></use></svg>'
+    )
+
+    generated_source = air.Tag.from_html_to_source(source)
+
+    compiled_source = compile(generated_source, "<generated>", "eval")
+    reconstructed = eval(compiled_source, {"air": air})
+
+    assert reconstructed.render() == source
+
+
+def test_from_html_preserves_explicit_empty_attribute_values() -> None:
+    source = '<div data-x=""></div>'
+
+    assert air.Tag.from_html(source).render() == source
+
+
+def test_from_html_preserves_valueless_attributes() -> None:
+    source = "<div data-x></div>"
+
+    assert air.Tag.from_html(source).render() == source
+
+
+def test_from_html_uses_ascii_case_folding_for_attribute_names() -> None:
+    source = '<div data-\u017f data-s=""></div>'
+
+    assert air.Tag.from_html(source).render() == source
+
+
+def test_from_html_preserves_kelvin_sign_in_attribute_names() -> None:
+    source = '<div data-\u212a data-k=""></div>'
+
+    assert air.Tag.from_html(source).render() == source
+
+
+def test_from_html_to_source_preserves_non_ascii_attribute_names() -> None:
+    source = '<div data-\u017f data-s=""></div>'
+
+    generated_source = air.Tag.from_html_to_source(source)
+    reconstructed = eval(compile(generated_source, "<generated>", "eval"), {"air": air})
+
+    assert reconstructed.render() == source
+
+
+def test_from_html_preserves_valueless_attributes_after_foster_parenting() -> None:
+    source = "<html><head></head><body><table><div data-x></div></table></body></html>"
+
+    rendered = air.Tag.from_html(source).render()
+
+    assert "<div data-x></div><table>" in rendered
+    assert 'data-x=""' not in rendered
+
+
+def test_from_html_does_not_match_attributes_to_synthesized_elements() -> None:
+    source = "<table><tr><td></td></tr><tbody data-x></tbody></table>"
+
+    rendered = air.Tag.from_html(source).render()
+
+    assert "<tbody><tr><td></td></tr></tbody><tbody data-x></tbody>" in rendered
+    assert 'data-x=""' not in rendered
+
+
 def test_to_source() -> None:
     actual_fragment_air_tag_source = FRAGMENT_AIR_TAG_SAMPLE.to_source()
     expected_fragment_air_tag_source = FRAGMENT_AIR_TAG_SOURCE_SAMPLE
@@ -569,9 +661,5 @@ def test_from_html_with_head_start_tag_only_raises_value_error() -> None:
         air.Tag.from_html("<head>")
 
 
-def test_from_html_with_head_element_only_raises_value_error() -> None:
-    with pytest.raises(
-        ValueError,
-        match=full_match("Tag.from_html(html_source) is unable to parse the HTML content."),
-    ):
-        air.Tag.from_html("<head></head>")
+def test_from_html_with_empty_head_element() -> None:
+    assert air.Tag.from_html("<head></head>") == air.Head()

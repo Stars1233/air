@@ -1,9 +1,9 @@
-"""Zero-config CSRF protection for AirForm.
+"""CSRF protection for AirForm.
 
-Tokens are HMAC-signed with a per-process secret that's auto-generated
-on import. No configuration needed for single-worker deployments. For
-multi-worker production, set the AIRFORM_SECRET environment variable
-so all workers share the same secret.
+Tokens are HMAC-signed with a per-process secret. No configuration is
+needed for single-process deployments. For multi-process production, set
+the AIRFORM_SECRET environment variable or call
+``configure_csrf_secret()`` so every process uses the same secret.
 
 Token format: timestamp:nonce:signature
 """
@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import os
 import secrets
+import sys
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -23,9 +24,19 @@ if TYPE_CHECKING:
     from pydantic import GetCoreSchemaHandler
     from pydantic_core import CoreSchema
 
-#: Secret key for signing CSRF tokens. Auto-generated per process,
-#: or read from AIRFORM_SECRET env var for multi-worker deployments.
-_SECRET: bytes = os.environ.get("AIRFORM_SECRET", "").encode() or secrets.token_bytes(32)
+
+def _initial_secret() -> bytes | None:
+    """Load the configured secret or safely initialize a process-local one."""
+    if configured_secret := os.environ.get("AIRFORM_SECRET", "").encode():
+        return configured_secret
+    if sys.platform == "emscripten":
+        return None
+    return secrets.token_bytes(32)
+
+
+#: Secret key for signing CSRF tokens. Threaded runtimes generate it eagerly
+#: to avoid first-use races. Emscripten runtimes generate it on first use.
+_SECRET: bytes | None = _initial_secret()
 
 #: How long a CSRF token stays valid (seconds). Default: 1 hour.
 CSRF_MAX_AGE: int = 3600
@@ -34,12 +45,42 @@ CSRF_MAX_AGE: int = 3600
 CSRF_FIELD_NAME: str = "csrf_token"
 
 
+def configure_csrf_secret(secret: str | bytes) -> None:
+    """Configure the secret used to sign and validate CSRF tokens.
+
+    Use this when the runtime supplies secrets through an API other than
+    environment variables. Configure the same non-empty secret in every process
+    before rendering or validating forms. Replacing it later invalidates tokens
+    signed with the previous secret.
+
+    Args:
+        secret: A non-empty text or byte secret.
+
+    Raises:
+        TypeError: If ``secret`` is not text or bytes.
+        ValueError: If ``secret`` is empty.
+    """
+    if isinstance(secret, str):
+        normalized_secret = secret.encode()
+    elif isinstance(secret, bytes):
+        normalized_secret = secret
+    else:
+        msg = "CSRF secret must be str or bytes."
+        raise TypeError(msg)
+    if not normalized_secret:
+        msg = "CSRF secret must not be empty."
+        raise ValueError(msg)
+
+    global _SECRET
+    _SECRET = normalized_secret
+
+
 def generate_csrf_token() -> str:
     """Generate a signed CSRF token."""
     timestamp = str(int(time.time()))
     nonce = secrets.token_urlsafe(16)
     payload = f"{timestamp}:{nonce}"
-    sig = hmac.new(_SECRET, payload.encode(), hashlib.sha256).hexdigest()
+    sig = hmac.new(_get_secret(), payload.encode(), hashlib.sha256).hexdigest()
     return f"{payload}:{sig}"
 
 
@@ -57,7 +98,7 @@ def _check_csrf_token(token: str, max_age: int = CSRF_MAX_AGE) -> str:
     timestamp_str, nonce, sig = parts
 
     expected_payload = f"{timestamp_str}:{nonce}"
-    expected_sig = hmac.new(_SECRET, expected_payload.encode(), hashlib.sha256).hexdigest()
+    expected_sig = hmac.new(_get_secret(), expected_payload.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected_sig, sig):
         msg = "Invalid CSRF token."
         raise ValueError(msg)
@@ -73,6 +114,14 @@ def _check_csrf_token(token: str, max_age: int = CSRF_MAX_AGE) -> str:
         raise ValueError(msg)
 
     return token
+
+
+def _get_secret() -> bytes:
+    """Return the configured secret, generating a process-local one on first use."""
+    global _SECRET
+    if _SECRET is None:
+        _SECRET = secrets.token_bytes(32)
+    return _SECRET
 
 
 class ValidCsrfToken(str):  # noqa: FURB189
