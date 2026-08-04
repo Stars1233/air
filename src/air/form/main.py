@@ -469,6 +469,7 @@ class AirForm[M: BaseModel]:
         self.initial_data = initial_data
         self.submitted_data: dict | None = None
         self._csrf_token: str | None = None
+        self._csrf_request: Request | None = None
 
     @property
     def data(self) -> M:
@@ -490,7 +491,8 @@ class AirForm[M: BaseModel]:
     async def from_request(cls, request: Request) -> Self:
         """Create and validate an AirForm instance from a request.
 
-        CSRF is always enforced for browser submissions.
+        CSRF is always enforced for browser submissions. The request's Origin,
+        or Referer when Origin is absent, must match the request target origin.
 
         Args:
             request: An object with an async ``form()`` method.
@@ -499,6 +501,7 @@ class AirForm[M: BaseModel]:
         self = cls()
         # A browser submission came from a rendered form, enforce CSRF
         self._csrf_token = "from_request"
+        self._csrf_request = request
         self.validate(dict(form_data))
         return self
 
@@ -515,7 +518,7 @@ class AirForm[M: BaseModel]:
         Raises:
             ValueError: If the CSRF token is missing, tampered, or expired.
         """
-        from air.form.csrf import CSRF_FIELD_NAME, _check_csrf_token  # noqa: PLC0415
+        from air.form.csrf import CSRF_FIELD_NAME, _check_csrf_origin, _check_csrf_token  # noqa: PLC0415
 
         self._data = None
         self.is_valid = False
@@ -526,6 +529,8 @@ class AirForm[M: BaseModel]:
         if self._csrf_token is not None:
             raw_token = self.submitted_data.pop(CSRF_FIELD_NAME, None)
             try:
+                if self._csrf_request is not None:
+                    _check_csrf_origin(self._csrf_request)
                 if raw_token is None:
                     msg = "CSRF token is missing."
                     raise ValueError(msg)  # noqa: TRY301

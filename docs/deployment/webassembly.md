@@ -37,8 +37,8 @@ to incoming requests and for packaging application dependencies.
 ## Runtime configuration
 
 `AIRFORM_SECRET` configures form signing when the runtime exposes environment
-variables normally. Runtimes that provide secrets through another API can
-configure the same value directly:
+variables normally. It must contain at least 32 unpredictable bytes. Runtimes
+that provide secrets through another API can configure the same value directly:
 
 ```python
 import air
@@ -46,8 +46,9 @@ import air
 air.configure_csrf_secret(runtime_secret)
 ```
 
-Call this before rendering or validating forms. Every process or isolate that
-can serve the application must use the same secret.
+Call this before rendering or validating forms. The setting is process-global;
+every process or isolate that can serve the application must use the same
+secret. Changing it while serving traffic invalidates outstanding forms.
 
 Storage, static assets, database bindings, application lifecycle behavior, and
 deployment configuration are responsibilities of the hosting integration.

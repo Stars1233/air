@@ -117,17 +117,39 @@ form.render()
 </div>
 ```
 
-Each field is wrapped in a `<div class="air-field">` with a label, input, and (after validation) error messages. HTML5 validation attributes (`required`, `minlength`, `maxlength`) are derived from Pydantic constraints. CSRF protection is automatic.
+Each field is wrapped in a `<div class="air-field">` with a label, input, and (after validation) error messages. HTML5 validation attributes (`required`, `minlength`, `maxlength`) are derived from Pydantic constraints. CSRF protection is automatic. Browser submissions validated with `from_request()` must include a same-origin `Origin` header, or a same-origin `Referer` header when `Origin` is unavailable. AirForm rejects submissions without either header.
 
-For multi-process production, set `AIRFORM_SECRET` so every process signs
-forms with the same key. If the runtime exposes secrets through another API,
-configure the key before rendering or validating forms:
+If Air runs behind a reverse proxy, configure the proxy integration so the ASGI
+request URL retains the browser-facing scheme and host; AirForm compares the
+source header against that request URL. For example, Caddy's `reverse_proxy`
+preserves `Host` and sets `X-Forwarded-Proto` by default. A Uvicorn backend must
+then trust proxy headers only from the proxy's address:
+
+```console
+uvicorn app:app --proxy-headers --forwarded-allow-ips="127.0.0.1"
+```
+
+Use the proxy's actual IP or trusted CIDR in production. Do not use `*` unless
+the backend is unreachable except through a trusted proxy. Other server/proxy
+combinations must provide the equivalent behavior: preserve the external
+`Host`, communicate the external scheme, and accept those forwarding headers
+only from trusted proxies.
+
+For multi-process production, set `AIRFORM_SECRET` to at least 32 unpredictable
+bytes so every process signs forms with the same key. If the runtime exposes
+secrets through another API, configure the key before rendering or validating
+forms. The configuration is process-global and must not change while serving
+traffic; rotating it invalidates outstanding forms:
 
 ```python
 import air
 
 air.configure_csrf_secret(runtime_secret)
 ```
+
+Rotate the secret atomically across all workers when possible. During a rolling
+rotation, old-key and new-key workers coexist temporarily, so a form rendered by
+one group can be rejected by the other until the rollout finishes.
 
 ## Validating a form
 
