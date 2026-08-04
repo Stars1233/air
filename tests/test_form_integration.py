@@ -155,6 +155,7 @@ def test_from_request_rejects_cross_origin_token_replay() -> None:
         pass
 
     app = air.Air()
+    state = {"transfers": 0, "victim_credential_seen": False}
 
     @app.get("/transfer")
     async def transfer_page() -> air.Html:
@@ -163,6 +164,9 @@ def test_from_request_rejects_cross_origin_token_replay() -> None:
     @app.post("/transfer")
     async def transfer(request: Request) -> air.Html:
         form = await TransferForm.from_request(request)
+        state["victim_credential_seen"] = request.cookies.get("session") == "victim-session"
+        if form.is_valid:
+            state["transfers"] += 1
         return air.Html(air.H1("accepted" if form.is_valid else "rejected"))
 
     attacker = TestClient(app)
@@ -177,6 +181,7 @@ def test_from_request_rejects_cross_origin_token_replay() -> None:
     )
 
     assert response.text == "<!doctype html><html><h1>rejected</h1></html>"
+    assert state == {"transfers": 0, "victim_credential_seen": True}
 
 
 def test_from_request_accepts_same_origin_referer_fallback() -> None:
