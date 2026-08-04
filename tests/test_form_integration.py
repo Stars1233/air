@@ -16,6 +16,8 @@ from pydantic import BaseModel
 import air
 from air import AirForm
 
+TEST_ORIGIN = "http://testserver"
+
 
 def _extract_csrf_token(html: str) -> str:
     """Extract the CSRF token from rendered form HTML."""
@@ -56,14 +58,18 @@ def test_form_validation_dependency_injection() -> None:
     csrf_token = _extract_csrf_token(get_response.text)
 
     # POST with valid data + CSRF token
-    response = client.post("/cheese", data={"name": "cheddar", "age": 5, "csrf_token": csrf_token})
+    response = client.post(
+        "/cheese",
+        data={"name": "cheddar", "age": 5, "csrf_token": csrf_token},
+        headers={"Origin": TEST_ORIGIN},
+    )
     assert response.status_code == 200
     assert response.text == "<!doctype html><html><h1>cheddar</h1></html>"
 
     # POST with missing fields + fresh CSRF token (need a new one each time)
     get_response = client.get("/cheese")
     csrf_token = _extract_csrf_token(get_response.text)
-    response = client.post("/cheese", data={"csrf_token": csrf_token})
+    response = client.post("/cheese", data={"csrf_token": csrf_token}, headers={"Origin": TEST_ORIGIN})
     assert response.status_code == 200
     assert response.text == "<!doctype html><html><h1>2</h1></html>"
 
@@ -97,13 +103,17 @@ def test_form_validation_in_view() -> None:
     get_response = client.get("/cheese")
     csrf_token = _extract_csrf_token(get_response.text)
 
-    response = client.post("/cheese", data={"name": "cheddar", "age": 5, "csrf_token": csrf_token})
+    response = client.post(
+        "/cheese",
+        data={"name": "cheddar", "age": 5, "csrf_token": csrf_token},
+        headers={"Origin": TEST_ORIGIN},
+    )
     assert response.status_code == 200
     assert response.text == "<!doctype html><html><h1>cheddar</h1></html>"
 
     get_response = client.get("/cheese")
     csrf_token = _extract_csrf_token(get_response.text)
-    response = client.post("/cheese", data={"csrf_token": csrf_token})
+    response = client.post("/cheese", data={"csrf_token": csrf_token}, headers={"Origin": TEST_ORIGIN})
     assert response.status_code == 200
     assert response.text == "<!doctype html><html><h1>2</h1></html>"
 
@@ -133,6 +143,72 @@ def test_form_render_in_view() -> None:
     assert '<label for="name">name</label>' in response.text
     assert "csrf_token" in response.text
     assert "</form>" in response.text
+
+
+def test_from_request_rejects_cross_origin_token_replay() -> None:
+    """A token obtained by another client cannot authorize a cross-origin POST."""
+
+    class TransferModel(BaseModel):
+        amount: int
+
+    class TransferForm(AirForm[TransferModel]):
+        pass
+
+    app = air.Air()
+
+    @app.get("/transfer")
+    async def transfer_page() -> air.Html:
+        return air.Html(TransferForm().render())
+
+    @app.post("/transfer")
+    async def transfer(request: Request) -> air.Html:
+        form = await TransferForm.from_request(request)
+        return air.Html(air.H1("accepted" if form.is_valid else "rejected"))
+
+    attacker = TestClient(app)
+    victim = TestClient(app)
+    attacker_token = _extract_csrf_token(attacker.get("/transfer").text)
+    victim.cookies.set("session", "victim-session")
+
+    response = victim.post(
+        "/transfer",
+        data={"amount": 100, "csrf_token": attacker_token},
+        headers={"Origin": "https://attacker.example"},
+    )
+
+    assert response.text == "<!doctype html><html><h1>rejected</h1></html>"
+
+
+def test_from_request_accepts_same_origin_referer_fallback() -> None:
+    """Referer is accepted when Origin is absent and its origin matches exactly."""
+
+    class TransferModel(BaseModel):
+        amount: int
+
+    class TransferForm(AirForm[TransferModel]):
+        pass
+
+    app = air.Air()
+
+    @app.get("/transfer")
+    async def transfer_page() -> air.Html:
+        return air.Html(TransferForm().render())
+
+    @app.post("/transfer")
+    async def transfer(request: Request) -> air.Html:
+        form = await TransferForm.from_request(request)
+        return air.Html(air.H1("accepted" if form.is_valid else "rejected"))
+
+    client = TestClient(app)
+    token = _extract_csrf_token(client.get("/transfer").text)
+
+    response = client.post(
+        "/transfer",
+        data={"amount": 100, "csrf_token": token},
+        headers={"Referer": f"{TEST_ORIGIN}/transfer?step=confirm"},
+    )
+
+    assert response.text == "<!doctype html><html><h1>accepted</h1></html>"
 
 
 def test_airform_generic_type_parameter() -> None:

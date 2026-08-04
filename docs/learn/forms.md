@@ -117,11 +117,17 @@ form.render()
 </div>
 ```
 
-Each field is wrapped in a `<div class="air-field">` with a label, input, and (after validation) error messages. HTML5 validation attributes (`required`, `minlength`, `maxlength`) are derived from Pydantic constraints. CSRF protection is automatic.
+Each field is wrapped in a `<div class="air-field">` with a label, input, and (after validation) error messages. HTML5 validation attributes (`required`, `minlength`, `maxlength`) are derived from Pydantic constraints. CSRF protection is automatic. Browser submissions validated with `from_request()` must include a same-origin `Origin` header, or a same-origin `Referer` header when `Origin` is unavailable. AirForm rejects submissions without either header.
 
-For multi-process production, set `AIRFORM_SECRET` so every process signs
-forms with the same key. If the runtime exposes secrets through another API,
-configure the key before rendering or validating forms:
+If Air runs behind a reverse proxy, configure the proxy integration so the ASGI
+request URL retains the browser-facing scheme and host; AirForm compares the
+source header against that request URL.
+
+For multi-process production, set `AIRFORM_SECRET` to at least 32 unpredictable
+bytes so every process signs forms with the same key. If the runtime exposes
+secrets through another API, configure the key before rendering or validating
+forms. The configuration is process-global and must not change while serving
+traffic; rotating it invalidates outstanding forms:
 
 ```python
 import air
