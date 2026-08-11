@@ -185,7 +185,7 @@ Renders as:
 
 ### Attributes starting with special characters
 
-To get around that in Python we can't begin function arguments with special characters, we lean into how **Air Tags** is kwargs friendly.
+To get around that in Python we can't begin function arguments with special characters, we lean into how **Air Tags** are kwarg-friendly.
 
 ```python
 air.P("Hello", class_="plain", **{"@data": 6})

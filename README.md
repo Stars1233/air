@@ -147,9 +147,9 @@ def index(request: air.Request):
     return jinja(request, name="index.html")
 ```
 
-### Start with Python
+### 2. Start with Python
 
-Write HTML as typed Python classes. Your editor can autocomplete attributes and your type checker validates nesting:
+Write HTML as typed Python classes. Using Python allows your editor to autocomplete attributes, and your type checker to validate nesting:
 
 `main.py`:
 
@@ -168,7 +168,7 @@ def index():
 
 ## Running Air's Development Server
 
-Choosing either of the above approach, both paths produces the same thing: a working web page.
+Either approach produces the same thing: a working web page.
 
 To see the result, run the following command and open <http://127.0.0.1:8000> in your browser.
 
