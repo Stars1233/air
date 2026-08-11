@@ -169,9 +169,23 @@ renders as
 </script>
 ```
 
+### Passing reserved words as kwargs
+
+Alternately, we can pass reserved keywords as kwargs.
+
+```python
+air.Label("Email", **{"class": "plain", "for": "email"})
+```
+
+Renders as:
+
+```html
+<label class="plain" for="email">Email</label>
+```
+
 ### Attributes starting with special characters
 
-To get around that in Python we can't begin function arguments with special characters, we lean into how **Air Tags** is kwargs friendly.
+To get around that in Python we can't begin function arguments with special characters, we lean into how **Air Tags** are kwarg-friendly.
 
 ```python
 air.P("Hello", class_="plain", **{"@data": 6})
@@ -275,7 +289,11 @@ Subclasses are not the only way to create custom Air Tags. You can also use func
 
 ```python
 def card(*content, header: str, footer: str):
-    return air.Article(air.Header(header), *content, air.Footer(footer))
+    return air.Article(
+        air.Header(header),
+        *content,
+        air.Footer(footer),
+    )
 ```
 
 We can use this function to create a card:
@@ -365,5 +383,12 @@ air.BaseTag.from_html_to_source("""
 This generates:
 
 ```python
-air.Html(air.Body(air.Main(air.H1("Hello, World", class_="header"))))
+air.Html(
+    air.Head(),
+    air.Body(
+        air.Main(
+            air.H1('Hello, World', class_='header'),
+        ),
+    ),
+)
 ```

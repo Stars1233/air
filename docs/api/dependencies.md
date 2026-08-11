@@ -34,7 +34,9 @@ def get_users(is_htmx: bool = Depends(air.is_htmx_request)):
         # Return full page for regular requests
         return air.Html(
             [
-                air.Head(air.Title("Users")),
+                air.Head(
+                    air.Title("Users"),
+                ),
                 air.Body(
                     [
                         air.H1("User List"),

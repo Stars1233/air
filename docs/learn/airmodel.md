@@ -264,8 +264,16 @@ async def submit_contact(request: air.Request):
     form = await ContactForm.from_request(request)
     if form.is_valid:
         await ContactMessage.create(**form.save_data())
-        return air.Html(air.H1("Message sent"))
-    return air.Html(air.Form(form.render(), method="post", action="/contact"))
+        return air.Html(
+            air.H1("Message sent"),
+        )
+    return air.Html(
+        air.Form(
+            form.render(),
+            method="post",
+            action="/contact"
+        ),
+    )
 ```
 
 `AirForm[ContactMessage]` gives you type-safe validated data. `ContactMessage.create()` writes it to PostgreSQL. Your editor knows the types at every step.
