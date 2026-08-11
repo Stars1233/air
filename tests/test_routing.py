@@ -1,6 +1,8 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterator
 from contextlib import asynccontextmanager
+from typing import Annotated
 
+import fastapi.dependencies.utils as fastapi_dependency_utils
 import pytest
 from fastapi import Depends
 from fastapi.testclient import TestClient
@@ -8,6 +10,7 @@ from starlette.responses import HTMLResponse
 from starlette.routing import BaseRoute, NoMatchFound
 
 import air
+import air.routing as routing
 from air import H1
 from air.responses import AirResponse
 from air.routing import AirRoute
@@ -510,6 +513,91 @@ def test_air_router_sync_dispatch() -> None:
 
     assert has_loop["sync"] is False, "sync handler should not be on the event loop"
     assert has_loop["async"] is True, "async handler should be on the event loop"
+
+
+def test_air_router_sync_dispatch_without_threads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WebAssembly runtimes execute sync endpoints without starting a thread."""
+    import asyncio  # noqa: PLC0415
+
+    monkeypatch.setattr(routing, "_threads_available", lambda: False)
+    app = air.Air()
+    has_loop = False
+
+    @app.get("/sync")
+    def sync_page() -> air.H1:
+        nonlocal has_loop
+        has_loop = asyncio.get_running_loop().is_running()
+        return air.H1("Sync")
+
+    response = TestClient(app).get("/sync")
+
+    assert response.status_code == 200
+    assert response.text == "<h1>Sync</h1>"
+    assert has_loop
+
+
+def test_air_router_missing_sync_return_without_threads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WebAssembly sync endpoints preserve Air's missing-return error."""
+    monkeypatch.setattr(routing, "_threads_available", lambda: False)
+    app = air.Air()
+
+    @app.get("/sync")
+    def sync_page() -> None:
+        pass
+
+    with pytest.raises(
+        TypeError,
+        match="Air endpoint returned None; did you forget a return statement",
+    ):
+        TestClient(app).get("/sync")
+
+
+def test_air_router_sync_dependencies_without_threads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WebAssembly runtimes execute regular and generator dependencies without threads."""
+    import asyncio  # noqa: PLC0415
+
+    monkeypatch.setattr(routing, "_threads_available", lambda: False)
+    monkeypatch.setattr(
+        fastapi_dependency_utils,
+        "run_in_threadpool",
+        fastapi_dependency_utils.run_in_threadpool,
+    )
+    monkeypatch.setattr(
+        fastapi_dependency_utils,
+        "contextmanager_in_threadpool",
+        fastapi_dependency_utils.contextmanager_in_threadpool,
+    )
+    routing._configure_threadless_dependency_dispatch()
+
+    dependency_loops: list[bool] = []
+    generator_events: list[str] = []
+
+    def sync_dependency() -> str:
+        dependency_loops.append(asyncio.get_running_loop().is_running())
+        return "dependency"
+
+    def sync_generator_dependency() -> Iterator[str]:
+        generator_events.append("enter")
+        yield "resource"
+        generator_events.append("exit")
+
+    app = air.Air()
+
+    @app.get("/sync-dependencies")
+    def sync_page(
+        dependency: Annotated[str, Depends(sync_dependency)],
+        resource: Annotated[str, Depends(sync_generator_dependency)],
+        *,
+        is_htmx: bool = air.is_htmx_request,
+    ) -> air.P:
+        return air.P(f"{dependency}:{resource}:{is_htmx}")
+
+    response = TestClient(app).get("/sync-dependencies", headers={"HX-Request": "true"})
+
+    assert response.status_code == 200
+    assert response.text == "<p>dependency:resource:True</p>"
+    assert dependency_loops == [True]
+    assert generator_events == ["enter", "exit"]
 
 
 def test_air_router_default_404_handler() -> None:

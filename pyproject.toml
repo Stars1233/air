@@ -85,16 +85,13 @@ dependencies = [
     "fastapi>=0.128.8", # https://pypi.org/project/fastapi
     "frozendict>=2.4.7", # https://pypi.org/project/frozendict
     "itsdangerous>=2.2.0", # https://pypi.org/project/itsdangerous
-    "lxml>=6.0.2", # https://pypi.org/project/lxml
-    "minify-html>=0.18.1", # https://pypi.org/project/minify-html
-    "nh3>=0.3.2", # https://pypi.org/project/nh3
-    "pygments>=2.19.2,!=2.20.0", # https://pypi.org/project/pygments
+    "pygments>=2.19.2,!=2.20.0; platform_system != 'Emscripten'", # https://pypi.org/project/pygments
     "python-multipart>=0.0.22", # https://pypi.org/project/python-multipart
-    "rich>=14.3.2", # https://pypi.org/project/rich
-    "selectolax>=0.4.6", # https://pypi.org/project/selectolax
+    "rich>=14.3.2; platform_system != 'Emscripten'", # https://pypi.org/project/rich
     "staticware>=0.2.0", # https://pypi.org/project/staticware
-    "typer>=0.23.0", # https://pypi.org/project/typer
-    "uvicorn>=0.40.0", # https://pypi.org/project/uvicorn
+    "tinyhtml5>=2.1.0,<3", # https://pypi.org/project/tinyhtml5
+    "typer>=0.23.0; platform_system != 'Emscripten'", # https://pypi.org/project/typer
+    "uvicorn>=0.40.0; platform_system != 'Emscripten'", # https://pypi.org/project/uvicorn
 ]
 # endregion project
 
@@ -130,7 +127,6 @@ docs = [
     "mkdocs>=1.6.1", # https://pypi.org/project/mkdocs
     "mkdocs-autorefs>=1.4.4", # https://pypi.org/project/mkdocs-autorefs
     "mkdocs-exclude>=1.0.2", # https://pypi.org/project/mkdocs-exclude
-    "mkdocs-jupyter>=0.25.1", # https://pypi.org/project/mkdocs-jupyter
     "mkdocs-llmstxt>=0.5.0", # https://pypi.org/project/mkdocs-llmstxt
     "mkdocs-material[imaging]>=9.7.2", # https://pypi.org/project/mkdocs-material
     "mkdocs-redirects>=1.2.2", # https://pypi.org/project/mkdocs-redirects
@@ -150,7 +146,6 @@ test = [
 ]
 typing-stubs = [
     "types-Markdown>=3.10.2.20260211", # https://pypi.org/project/types-Markdown
-    "types-lxml>=2026.1.1", # https://pypi.org/project/types-lxml
     "types-pygments>=2.19.0.20251121", # https://pypi.org/project/types-pygments
 ]
 

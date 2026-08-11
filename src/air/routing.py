@@ -1,7 +1,9 @@
 """Use routing if you want a single cohesive app where all routes share middlewares and error handling."""
 
 import inspect
-from collections.abc import Callable, Sequence
+import sys
+from collections.abc import AsyncIterator, Callable, Sequence
+from contextlib import AbstractContextManager, asynccontextmanager
 from enum import Enum
 from functools import wraps
 from types import FunctionType
@@ -12,12 +14,14 @@ from typing import (
     Protocol,
     TypedDict,
     Unpack,
+    cast,
     get_type_hints,
     override,
 )
 from urllib.parse import urlencode
 from warnings import deprecated as warnings_deprecated
 
+import fastapi.dependencies.utils as fastapi_dependency_utils
 import fastapi.encoders
 from fastapi import params
 from fastapi.params import Depends
@@ -41,6 +45,57 @@ fastapi.encoders.ENCODERS_BY_TYPE[BaseTag] = str
 fastapi.encoders.encoders_by_class_tuples = fastapi.encoders.generate_encoders_by_class_tuples(
     fastapi.encoders.ENCODERS_BY_TYPE
 )
+
+
+def _threads_available() -> bool:
+    """Return whether synchronous handlers can be dispatched to worker threads."""
+    return sys.platform != "emscripten"
+
+
+async def _run_sync_directly[**P, T](func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
+    """Call a synchronous dependency directly when worker threads are unavailable."""
+    return func(*args, **kwargs)
+
+
+@asynccontextmanager
+async def _enter_sync_context_directly[T](context_manager: AbstractContextManager[T]) -> AsyncIterator[T]:
+    """Enter a synchronous generator dependency without a worker thread.
+
+    Yields:
+        The value yielded by the dependency's context manager.
+    """
+    with context_manager as value:
+        yield value
+
+
+def _configure_threadless_dependency_dispatch() -> None:
+    """Keep FastAPI's synchronous dependencies on the event loop in WebAssembly."""
+    if _threads_available():
+        return
+    dependency_utils = cast("Any", fastapi_dependency_utils)
+    dependency_utils.run_in_threadpool = _run_sync_directly
+    dependency_utils.contextmanager_in_threadpool = _enter_sync_context_directly
+
+
+_configure_threadless_dependency_dispatch()
+
+
+def _to_response(
+    result: Any,
+    response_class: type[Response],
+    response_kwargs: dict[str, Any],
+) -> Response:
+    """Convert a route result to a response while rejecting missing returns.
+
+    Raises:
+        TypeError: If the endpoint returned ``None``.
+    """
+    if result is None:
+        message = "Air endpoint returned None; did you forget a return statement?"
+        raise TypeError(message)
+    if isinstance(result, Response):
+        return result
+    return response_class(result, **response_kwargs)
 
 
 class RouteCallable(Protocol):
@@ -154,9 +209,9 @@ class RouterMixin:
     ) -> Callable[..., Any]:
         """Wrap func to convert non-Response returns using response_class.
 
-        Preserves the original sync/async nature so FastAPI dispatches
-        sync handlers to a threadpool instead of blocking the event
-        loop (#1067).
+        Preserves the original sync/async nature where threads are available.
+        On Emscripten runtimes, sync handlers are wrapped as coroutines because
+        Python threads are unavailable.
 
         Returns:
             A wrapped endpoint function with the same sync/async signature.
@@ -172,24 +227,21 @@ class RouterMixin:
             @wraps(func)
             async def endpoint(*args: Any, **kw: Any) -> Response:
                 result = await func(*args, **kw)
-                if result is None:
-                    message = "Air endpoint returned None; did you forget a return statement?"
-                    raise TypeError(message)
-                if isinstance(result, Response):
-                    return result
-                return response_class(result, **response_kwargs)
+                return _to_response(result, response_class, response_kwargs)
 
-        else:
+        elif _threads_available():
 
             @wraps(func)
             def endpoint(*args: Any, **kw: Any) -> Response:
                 result = func(*args, **kw)
-                if result is None:
-                    message = "Air endpoint returned None; did you forget a return statement?"
-                    raise TypeError(message)
-                if isinstance(result, Response):
-                    return result
-                return response_class(result, **response_kwargs)
+                return _to_response(result, response_class, response_kwargs)
+
+        else:
+
+            @wraps(func)
+            async def endpoint(*args: Any, **kw: Any) -> Response:
+                result = func(*args, **kw)
+                return _to_response(result, response_class, response_kwargs)
 
         return endpoint
 
