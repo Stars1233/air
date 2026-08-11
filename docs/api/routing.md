@@ -17,7 +17,7 @@ def cart_page():
 
 Then in our main page we can load that and tie it into our `main.py` app.
 
-```python title="cart.py"
+```python title="main.py"
 import air
 from cart import router as cart_router
 
