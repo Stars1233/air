@@ -468,8 +468,7 @@ app = air.Air()
 def avatar(request: air.Request):
     fragment = air.Div(
         air.P("We are fans of the Last Avatar"),
-        class_="thing"
-    ),  # (1)!
+    )  # (1)!
 
     return app.jinja(
         request,
